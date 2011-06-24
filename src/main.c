@@ -23,9 +23,6 @@
 /* main.c - firmware for Ultima 8 drive corrector based on Covington's ALCOR */
 
 #include <htc.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
 
 #if defined(_16F84A)
 __CONFIG (FOSC_XT & WDTE_OFF & PWRTE_ON);
@@ -52,11 +49,19 @@ __CONFIG (FOSC_XT & WDTE_OFF & PWRTE_ON);
 #define SW_SWAPEW	RB7	/* swap SW_EAST and SW_WEST */
 #define PORTB_INPUTS    0b11111111
 
-/* Timer counts determined programmatically with ../util/timer.c,
- * which presumes 4mhz clock and 1:64 prescaler.
- */
-char freq60[] = { 0, 0, 126, 169, 189, 191, 204, 213, 219, 223};
-char freq50[] = { 0, 0, 126, 169, 176, 178, 204, 213, 219, 223};
+#if (_XTAL_FREQ == 4000000)
+/* generated with ./genfreq 4000000 64 */
+char freq60[] = {0, 0, 126, 169, 189, 191, 204, 213, 219, 223};
+char freq50[] = {0, 0, 126, 169, 176, 178, 204, 213, 219, 223};
+#define PRESCALER	5 /* 1:64 */
+#elif (_XTAL_FREQ == 10000000)
+/* generated with ./genfreq 10000000 64 */
+char freq60[] = {0, 0, 0, 39, 90, 93, 126, 147, 163, 175};
+char freq50[] = {0, 0, 0, 39, 56, 61, 126, 147, 163, 175};
+#define PRESCALER	5 /* 1:64 */
+#else
+#error you must recalculate freq table for new clock rate
+#endif
 
 #define FREQ_EAST	0 /* special:  turn off motor, but leave timer on */
 #define FREQ_LUNAR	4
@@ -116,8 +121,8 @@ main(void)
 {
     /* Timer configuration
      */ 
-    PSA = 0;		/* enable prescaler */
-    OPTION_REGbits.PS = 5;/* select 64:1 */
+    PSA = 0;		/* assign prescaler to timer */
+    OPTION_REGbits.PS = PRESCALER; /* set prescaler value */
     T0CS = 0;		/* select internal clock */
     TMR0 = freq60[freqnow];
 
