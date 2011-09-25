@@ -34,6 +34,7 @@ __CONFIG (1, FOSC_IRC);
 #endif
 __CONFIG (2, BOREN_OFF & WDTEN_OFF);
 __CONFIG (3, HFOFST_OFF);
+__CONFIG (4, LVP_OFF);
 #else
 #error Config bits may need attention for non-18F14K22 chip.
 #endif
@@ -151,6 +152,7 @@ main(void)
     TRISB = PORTB_INPUTS;
     WPUB = PORTB_PULLUPS;
     TRISC = PORTC_INPUTS;
+    ANS7 = 0;
 
     PHASE1 = 0;
     PHASE2 = 0;
