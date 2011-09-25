@@ -1,21 +1,22 @@
-PICP=picp
-PICP_TTY=/dev/ttyUSB0
-CHIP=16f84a
-FREQ=4000000
+CHIP=18F14K22
+CFLAGS=-DCLOCK_FREQ=64000000 -DMOTOR_HZ=60 -DSWAPEW=0 -DSWAPNS=0
 SRCS=main.c
 
 all: main.hex genfreq
 
 main.hex: $(SRCS)
-	picc -D_XTAL_FREQ=$(FREQ) --chip=$(CHIP) $(SRCS)
+	picc18 -O$@ --chip=$(CHIP) $(SRCS) $(CFLAGS)
 
 clean:
 	rm -f *.hex *.hxl
 	rm -f *.rlf *.obj *.as *.lst *.sym *.sdb *.cof *.pre *.p1 funclist
 	rm -f *.o genfreq
 
-# erase whole chip, verify program mem is blank, the write program mem
+# -P<device> -F<hexfile>
+# -M     erase/program/verify all memory regions
+# -R -T  power and release MCLR after operations
 pgm: main.hex
-	sudo $(PICP) $(PICP_TTY) $(CHIP) -ef
-	sudo $(PICP) $(PICP_TTY) $(CHIP) -bp
-	sudo $(PICP) $(PICP_TTY) $(CHIP) -wp $<
+	pk2cmd -PPIC$(CHIP) -F$< -M -R -T
+# verify that pk2cmd sees a programmer
+pk2ver:
+	pk2cmd -P -?V
