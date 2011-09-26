@@ -99,8 +99,11 @@ void interrupt
 isr (void)
 {
     static char state = 0;
+    static int cycles = 0;
 
     if (TMR0IE && TMR0IF) {
+        if (cycles++ < 300)
+            goto done;
 	switch (state) {
             case 0:
                 if (freqnow != FREQ_EAST) {
@@ -132,6 +135,7 @@ isr (void)
                     freqnow--;
                 break;
         }
+done:
 	TMR0 = freq[freqnow] + FUDGE_COUNT;
         TMR0IF = 0;
     }
