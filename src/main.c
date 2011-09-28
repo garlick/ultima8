@@ -33,7 +33,7 @@ __CONFIG (1, FOSC_IRC & PLLEN_ON);  /* system clock is HFOSC*4 */
 __CONFIG (1, FOSC_IRC);
 #endif
 __CONFIG (2, BOREN_OFF & WDTEN_OFF);
-__CONFIG (3, HFOFST_OFF);
+__CONFIG (3, HFOFST_OFF & MCLRE_OFF);
 __CONFIG (4, LVP_OFF);
 #else
 #error Config bits may need attention for non-18F14K22 chip.
@@ -41,23 +41,25 @@ __CONFIG (4, LVP_OFF);
 
 #define SW_NORTH	RA5
 #define SW_EAST		RA4
-#define PORTA_INPUTS	0b00110000
-#define PORTA_PULLUPS	0b00110000
+#define SW_SOUTH	RA3
+#define SW_WEST		RA2
+#define PORTA_INPUTS	0b00111100
+#define PORTA_PULLUPS	0b00111100
+#define PORTA_IOC	0b00111100
 
 #define SQWAVE		RB7
 #define FOCOUT		RB5
 #define PORTB_INPUTS	0b00000000
 #define PORTB_PULLUPS	0b00000000
+#define PORTB_IOC       0
 
-#define SW_SOUTH	RC7 // FIXME use AN9 to see focus+
-#define SW_WEST		RC6 // FIXME use AN8 to see focus-
-#define PWM		RC5 // FIXME had to PWM module once that works
+#define PWM		RC5
 #define PHASE1		RC4
 #define PHASE2		RC3
 #define FOCIN		RC2
 #define GONORTH		RC1
 #define GOSOUTH		RC0
-#define PORTC_INPUTS	0b11000000
+#define PORTC_INPUTS	0b00000000
 
 /* generated with ./genfreq 8 (CLOCK_FREQ=64000000) */
 int freq60[] = {31693, 31693, 48359, 53915, 56508, 56693, 58359, 59470, 60264, 60859};
@@ -90,20 +92,38 @@ int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 6
 char freqnow = FREQ_EAST;
 char freqtarg = FREQ_SIDEREAL;
 
-/* FIXME: should be configurable via I2C */
-char swapew = SWAPEW;
-char swapns = SWAPNS;
-char lunar = 0;
-
 void interrupt
 isr (void)
 {
     static char state = 0;
-    static int cycles = 0;
+    static int startdelay = 60;
 
+    if (RABIE && RABIF) {
+        /* DEC */
+        if (!SW_NORTH && SW_SOUTH) {
+            GONORTH = 1;
+            GOSOUTH = 0;
+        } else if (SW_NORTH && !SW_SOUTH) {
+            GONORTH = 0;
+            GOSOUTH = 1;
+        } else {
+            GONORTH = 0;
+            GOSOUTH = 0;
+        }
+        /* RA */
+        if (!SW_EAST && SW_WEST)
+            freqtarg = FREQ_EAST;
+        else if (SW_EAST && !SW_WEST)
+            freqtarg = FREQ_WEST;
+        else
+            freqtarg = FREQ_SIDEREAL;
+        RABIF = 0;
+    }
     if (TMR0IE && TMR0IF) {
-        if (cycles++ < 300)
+        if (startdelay > 0) {
+            startdelay--;
             goto done;
+        }
 	switch (state) {
             case 0:
                 if (freqnow != FREQ_EAST) {
@@ -120,7 +140,7 @@ isr (void)
             case 2:
                 if (freqnow != FREQ_EAST) {
                     SQWAVE = 0;
-                    PHASE2 = 1;
+                    PHASE2 = 0;
                 }
                 state = 3;
                 break;
@@ -151,17 +171,29 @@ main(void)
 
     /* Port configuration
      */
+    ANSEL = 0;
+    ANSELH = 0;
+
     TRISA = PORTA_INPUTS;
     WPUA = PORTA_PULLUPS;
+    IOCA = PORTA_IOC;
+    RABPU = 0;
+    RABIE = 1;
+
     TRISB = PORTB_INPUTS;
     WPUB = PORTB_PULLUPS;
+    IOCB = PORTB_IOC;
+
     TRISC = PORTC_INPUTS;
-    ANS7 = 0;
 
     PHASE1 = 0;
     PHASE2 = 0;
     SQWAVE = 0;
     PWM = 1;
+    GONORTH = 0;
+    GOSOUTH = 0;
+    FOCIN = 0;
+    FOCOUT = 0;
 
     /* Timer 0 configuration
      */ 
@@ -175,38 +207,8 @@ main(void)
     TMR0 = freq[freqnow]; 	/* load count */
     TMR0ON = 1;			/* start timer */
 
-    /* Poll for switch closures (active low).
-     */
     for (;;) {
-        /* RA */
-        if (!SW_EAST == 0 && SW_WEST)
-            freqtarg = swapew ? FREQ_WEST : FREQ_EAST;
-        else if (!SW_WEST && SW_EAST)
-            freqtarg = swapew ? FREQ_EAST : FREQ_WEST;
-        else
-            freqtarg = lunar ? FREQ_LUNAR : FREQ_SIDEREAL;
-
-        /* DEC */
-        if (!SW_NORTH && SW_SOUTH) {
-            if (swapns) {
-                GONORTH = 0;
-                GOSOUTH = 1;
-            } else {
-                GONORTH = 1;
-                GOSOUTH = 0;
-            }
-        } else if (!SW_SOUTH && SW_NORTH) {
-            if (swapns) {
-                GONORTH = 1;
-                GOSOUTH = 0;
-            } else {
-                GONORTH = 0;
-                GOSOUTH = 1;
-            } 
-        } else {
-            GONORTH = 0;
-            GOSOUTH = 0;
-        }
+	/* FIXME arrange to sleep instead of busywait? */
     }
 }
 
