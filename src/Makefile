@@ -19,4 +19,5 @@ pgm: main.hex
 	pk2cmd -PPIC$(CHIP) -F$< -M -R -T
 # verify that pk2cmd sees a programmer
 pk2ver:
+	sudo chmod 666 /dev/pickit*
 	pk2cmd -P -?V
