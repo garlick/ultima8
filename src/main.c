@@ -140,7 +140,7 @@ isr (void)
             case 2:
                 if (freqnow != FREQ_EAST) {
                     SQWAVE = 0;
-                    PHASE2 = 0;
+                    PHASE2 = 1;
                 }
                 state = 3;
                 break;
