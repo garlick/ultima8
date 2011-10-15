@@ -39,26 +39,26 @@ __CONFIG (4, LVP_OFF);
 #error Config bits may need attention for non-18F14K22 chip.
 #endif
 
-#define SW_NORTH	RA5
-#define SW_EAST		RA4
-#define SW_SOUTH	RA3
-#define SW_WEST		RA2
+#define SW_NORTH	PORTAbits.RA5
+#define SW_EAST		PORTAbits.RA4
+#define SW_SOUTH	PORTAbits.RA3
+#define SW_WEST		PORTAbits.RA2
 #define PORTA_INPUTS	0b00111100
 #define PORTA_PULLUPS	0b00111100
 #define PORTA_IOC	0b00111100
 
-#define SQWAVE		RB7
-#define FOCOUT		RB5
+#define SQWAVE		PORTBbits.RB7
+#define FOCOUT		PORTBbits.RB5
 #define PORTB_INPUTS	0b00000000
 #define PORTB_PULLUPS	0b00000000
 #define PORTB_IOC       0
 
-#define PWM		RC5
-#define PHASE1		RC4
-#define PHASE2		RC3
-#define FOCIN		RC2
-#define GONORTH		RC1
-#define GOSOUTH		RC0
+#define PWM		PORTCbits.RC5
+#define PHASE1		PORTCbits.RC4
+#define PHASE2		PORTCbits.RC3
+#define FOCIN		PORTCbits.RC2
+#define GONORTH		PORTCbits.RC1
+#define GOSOUTH		PORTCbits.RC0
 #define PORTC_INPUTS	0b00000000
 
 /* generated with ./genfreq 8 (CLOCK_FREQ=64000000) */
@@ -89,8 +89,8 @@ int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 6
 #error unsupported MOTOR_HZ
 #endif
 
-char freqnow = FREQ_EAST;
-char freqtarg = FREQ_SIDEREAL;
+static char freqnow = FREQ_EAST;
+static char freqtarg = FREQ_SIDEREAL;
 
 void interrupt
 isr (void)
@@ -99,18 +99,6 @@ isr (void)
     static int startdelay = 60;
 
     if (RABIE && RABIF) {
-        /* DEC */
-        if (!SW_NORTH && SW_SOUTH) {
-            GONORTH = 1;
-            GOSOUTH = 0;
-        } else if (SW_NORTH && !SW_SOUTH) {
-            GONORTH = 0;
-            GOSOUTH = 1;
-        } else {
-            GONORTH = 0;
-            GOSOUTH = 0;
-        }
-        /* RA */
         if (!SW_EAST && SW_WEST)
             freqtarg = FREQ_EAST;
         else if (SW_EAST && !SW_WEST)
@@ -155,6 +143,8 @@ isr (void)
                     freqnow--;
                 break;
         }
+        GONORTH = !SW_NORTH;
+        GOSOUTH = !SW_SOUTH;
 done:
 	TMR0 = freq[freqnow] + FUDGE_COUNT;
         TMR0IF = 0;
@@ -171,14 +161,14 @@ main(void)
 
     /* Port configuration
      */
-    ANSEL = 0;
-    ANSELH = 0;
+    ANSEL = 0;			/* disable all analog inputs */
+    ANSELH = 0;			/*  high byte too */
+    RABPU = 0;			/* enable weak pullups on PORTA and B */
+    RABIE = 1;			/* enable interrupt on change PORTA and B */
 
     TRISA = PORTA_INPUTS;
-    WPUA = PORTA_PULLUPS;
-    IOCA = PORTA_IOC;
-    RABPU = 0;
-    RABIE = 1;
+    WPUA = PORTA_PULLUPS;	/* enable weak pullups (needed with RABPU) */
+    IOCA = PORTA_IOC;		/* interrupt on change */
 
     TRISB = PORTB_INPUTS;
     WPUB = PORTB_PULLUPS;
