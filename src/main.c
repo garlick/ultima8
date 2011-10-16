@@ -39,27 +39,27 @@ __CONFIG (4, LVP_OFF);
 #error Config bits may need attention for non-18F14K22 chip.
 #endif
 
-#define SW_NORTH	PORTAbits.RA5
-#define SW_EAST		PORTAbits.RA4
-#define SW_SOUTH	PORTAbits.RA3
-#define SW_WEST		PORTAbits.RA2
-#define PORTA_INPUTS	0b00111100
-#define PORTA_PULLUPS	0b00111100
-#define PORTA_IOC	0b00111100
+#define SW_NORTH        PORTAbits.RA5
+#define SW_EAST         PORTAbits.RA4
+#define SW_SOUTH        PORTAbits.RA3
+#define SW_WEST         PORTAbits.RA2
+#define PORTA_INPUTS    0b00111100
+#define PORTA_PULLUPS   0b00111100
+#define PORTA_IOC       0b00111100
 
-#define SQWAVE		PORTBbits.RB7
-#define FOCOUT		PORTBbits.RB5
-#define PORTB_INPUTS	0b00000000
-#define PORTB_PULLUPS	0b00000000
+#define SQWAVE          PORTBbits.RB7
+#define FOCOUT          PORTBbits.RB5
+#define PORTB_INPUTS    0b00000000
+#define PORTB_PULLUPS   0b00000000
 #define PORTB_IOC       0
 
-#define PWM		PORTCbits.RC5
-#define PHASE1		PORTCbits.RC4
-#define PHASE2		PORTCbits.RC3
-#define FOCIN		PORTCbits.RC2
-#define GONORTH		PORTCbits.RC1
-#define GOSOUTH		PORTCbits.RC0
-#define PORTC_INPUTS	0b00000000
+#define PWM             PORTCbits.RC5
+#define PHASE1          PORTCbits.RC4
+#define PHASE2          PORTCbits.RC3
+#define FOCIN           PORTCbits.RC2
+#define GONORTH         PORTCbits.RC1
+#define GOSOUTH         PORTCbits.RC0
+#define PORTC_INPUTS    0b00000000
 
 /* generated with ./genfreq 8 (CLOCK_FREQ=64000000) */
 int freq60[] = {31693, 31693, 48359, 53915, 56508, 56693, 58359, 59470, 60264, 60859};
@@ -67,19 +67,19 @@ int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 6
 #define FUDGE_COUNT 500 /* FIXME shouldn't need this */
 
 #if (CLOCK_FREQ == 64000000)
-#define PRESCALER	2 /* 1:8 */
-#define IRCF_VAL	7
+#define PRESCALER       2 /* 1:8 */
+#define IRCF_VAL        7
 #elif (CLOCK_FREQ == 16000000)
-#define PRESCALER	0 /* 1:2 */
-#define IRCF_VAL	7
+#define PRESCALER       0 /* 1:2 */
+#define IRCF_VAL        7
 #else
 #error unsupported CLOCK_FREQ
 #endif
 
-#define FREQ_EAST	0 /* special:  turn off motor, but leave timer on */
-#define FREQ_LUNAR	4
-#define FREQ_SIDEREAL	5
-#define FREQ_WEST	9
+#define FREQ_EAST       0 /* special:  turn off motor, but leave timer on */
+#define FREQ_LUNAR      4
+#define FREQ_SIDEREAL   5
+#define FREQ_WEST       9
 
 #if (MOTOR_HZ == 60)
 #define freq freq60
@@ -112,7 +112,7 @@ isr (void)
             startdelay--;
             goto done;
         }
-	switch (state) {
+        switch (state) {
             case 0:
                 if (freqnow != FREQ_EAST) {
                     SQWAVE = 1;
@@ -136,17 +136,17 @@ isr (void)
                 if (freqnow != FREQ_EAST)
                     PHASE2 = 0;
                 state = 0;
-		/* Cycle completed - change timer count? */
-		if (freqnow < freqtarg)
+                /* Cycle completed - change timer count? */
+                if (freqnow < freqtarg)
                     freqnow++;
-		else if (freqnow > freqtarg)
+                else if (freqnow > freqtarg)
                     freqnow--;
                 break;
         }
         GONORTH = !SW_NORTH;
         GOSOUTH = !SW_SOUTH;
 done:
-	TMR0 = freq[freqnow] + FUDGE_COUNT;
+        TMR0 = freq[freqnow] + FUDGE_COUNT;
         TMR0IF = 0;
     }
 }
@@ -161,14 +161,14 @@ main(void)
 
     /* Port configuration
      */
-    ANSEL = 0;			/* disable all analog inputs */
-    ANSELH = 0;			/*  high byte too */
-    RABPU = 0;			/* enable weak pullups on PORTA and B */
-    RABIE = 1;			/* enable interrupt on change PORTA and B */
+    ANSEL = 0;                  /* disable all analog inputs */
+    ANSELH = 0;                 /*  high byte too */
+    RABPU = 0;                  /* enable weak pullups on PORTA and B */
+    //RABIE = 1;                /* enable interrupt on change PORTA and B */
 
     TRISA = PORTA_INPUTS;
-    WPUA = PORTA_PULLUPS;	/* enable weak pullups (needed with RABPU) */
-    IOCA = PORTA_IOC;		/* interrupt on change */
+    WPUA = PORTA_PULLUPS;       /* enable weak pullups (needed with RABPU) */
+    IOCA = PORTA_IOC;           /* interrupt on change */
 
     TRISB = PORTB_INPUTS;
     WPUB = PORTB_PULLUPS;
@@ -187,18 +187,18 @@ main(void)
 
     /* Timer 0 configuration
      */ 
-    T0CONbits.T0PS = PRESCALER;	/* set prescaler value */
-    PSA = 0;			/* assign prescaler */
-    T0CS = 0;			/* use instr cycle clock (CLOCK_FREQ/4) */
-    T08BIT = 0;			/* 16 bit mode */
-    TMR0IE = 1;         	/* enable timer0 interrupt */
-    PEIE = 1;			/* enable peripheral interrupts */
-    GIE = 1;			/* enable global interrupts */
-    TMR0 = freq[freqnow]; 	/* load count */
-    TMR0ON = 1;			/* start timer */
+    T0CONbits.T0PS = PRESCALER;     /* set prescaler value */
+    PSA = 0;                        /* assign prescaler */
+    T0CS = 0;                       /* use instr cycle clock (CLOCK_FREQ/4) */
+    T08BIT = 0;                     /* 16 bit mode */
+    TMR0IE = 1;                     /* enable timer0 interrupt */
+    PEIE = 1;                       /* enable peripheral interrupts */
+    GIE = 1;                        /* enable global interrupts */
+    TMR0 = freq[freqnow];           /* load count */
+    TMR0ON = 1;                     /* start timer */
 
     for (;;) {
-	/* FIXME arrange to sleep instead of busywait? */
+        /* FIXME arrange to sleep instead of busywait? */
     }
 }
 
