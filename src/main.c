@@ -22,7 +22,7 @@
 
 /* main.c - firmware for Ultima 8 drive corrector based on Covington's ALCOR */
 
-/* NOTE: compiled with hi-tech C pro V9.66 */
+/* NOTE: compiled with hi-tech C pro V9.80 */
 
 #include <htc.h>
 
