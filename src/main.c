@@ -53,6 +53,7 @@ __CONFIG (4, LVP_OFF);
 #define PORTB_PULLUPS   0b00000000
 #define PORTB_IOC       0
 
+#define BLINKY          PORTCbits.RC7
 #define PWM             PORTCbits.RC5
 #define PHASE1          PORTCbits.RC4
 #define PHASE2          PORTCbits.RC3
@@ -112,6 +113,10 @@ isr (void)
             startdelay--;
             goto done;
         }
+        if (freqnow == FREQ_EAST)
+            BLINKY = 1; /* LED off */
+        else
+            BLINKY = 0; /* LED on */
         switch (state) {
             case 0:
                 if (freqnow != FREQ_EAST) {
@@ -179,11 +184,12 @@ main(void)
     PHASE1 = 0;
     PHASE2 = 0;
     SQWAVE = 0;
-    PWM = 1;
+    PWM = 1; /* TODO: enable PWM - for now set high */
     GONORTH = 0;
     GOSOUTH = 0;
     FOCIN = 0;
     FOCOUT = 0;
+    BLINKY = 1; /* LED off */
 
     /* Timer 0 configuration
      */ 
