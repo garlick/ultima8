@@ -40,9 +40,9 @@ __CONFIG (4, LVP_OFF);
 #endif
 
 #define SW_NORTH        PORTAbits.RA5
-#define SW_EAST         PORTAbits.RA4
-#define SW_SOUTH        PORTAbits.RA3
-#define SW_WEST         PORTAbits.RA2
+#define SW_SOUTH        PORTAbits.RA4 // FIXME: ADC
+#define SW_EAST         PORTAbits.RA3
+#define SW_WEST         PORTAbits.RA2 // FIXME: ADC
 #define PORTA_INPUTS    0b00111100
 #define PORTA_PULLUPS   0b00111100
 #define PORTA_IOC       0b00111100
@@ -53,7 +53,7 @@ __CONFIG (4, LVP_OFF);
 #define PORTB_PULLUPS   0b00000000
 #define PORTB_IOC       0
 
-#define BLINKY          PORTCbits.RC7
+#define LED             PORTCbits.RC7
 #define PWM             PORTCbits.RC5
 #define PHASE1          PORTCbits.RC4
 #define PHASE2          PORTCbits.RC3
@@ -114,9 +114,9 @@ isr (void)
             goto done;
         }
         if (freqnow == FREQ_EAST)
-            BLINKY = 1; /* LED off */
+            LED = 1; /* LED off */
         else
-            BLINKY = 0; /* LED on */
+            LED = 0; /* LED on */
         switch (state) {
             case 0:
                 if (freqnow != FREQ_EAST) {
@@ -189,7 +189,7 @@ main(void)
     GOSOUTH = 0;
     FOCIN = 0;
     FOCOUT = 0;
-    BLINKY = 1; /* LED off */
+    LED = 1; /* LED off */
 
     /* Timer 0 configuration
      */ 
