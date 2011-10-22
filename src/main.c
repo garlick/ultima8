@@ -40,11 +40,11 @@ __CONFIG (4, LVP_OFF);
 #endif
 
 #define SW_NORTH        PORTAbits.RA5
-#define SW_SOUTH        PORTAbits.RA4	// FIXME: use ADC for focus button
+#define SW_SOUTH        PORTAbits.RA4   // FIXME: use ADC for focus button
 #define SW_EAST         PORTAbits.RA3
-#define SW_WEST         PORTAbits.RA2	// FIXME: use ADC for focus button
+#define SW_WEST         PORTAbits.RA2   // FIXME: use ADC for focus button
 #define PORTA_INPUTS    0b00111100
-#define PORTA_PULLUPS   0b00101000	// external p/u on RA2, RA4
+#define PORTA_PULLUPS   0b00101000      // external p/u on RA2, RA4
 #define PORTA_IOC       0
 
 #define SQWAVE          PORTBbits.RB7
@@ -92,6 +92,8 @@ int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 6
 
 static char freqnow = FREQ_EAST;
 static char freqtarg = FREQ_SIDEREAL;
+static char decadj = 0;
+static char focusadj = 0;
 
 /* Interrupt is driven by TMR0 at variable rate.  N.B. Although FREQ_EAST
  * is 0Hz, we still run timer, but with AC output inhibited.
@@ -203,16 +205,19 @@ set_dec_motor (dec_t want)
             GONORTH = 0;
             NOP ();
             GOSOUTH = 0;
+            decadj = 0;
             break;
         case DEC_NORTH:
             GONORTH = 1;
             NOP ();
             GOSOUTH = 0;
+            decadj = 1;
             break;
         case DEC_SOUTH:
             GONORTH = 0;
             NOP ();
             GOSOUTH = 1;
+            decadj = 1;
             break;
     }
     cur = want;
@@ -236,6 +241,15 @@ poll_buttons_dec (void)
     else {
         set_dec_motor (DEC_OFF);
     }
+}
+
+void
+indicate(void)
+{
+    if (freqnow != FREQ_SIDEREAL || decadj || focusadj)
+        LED = 0;
+    else
+        LED = 1;
 }
 
 void
@@ -288,6 +302,7 @@ main(void)
     for (;;) {
         poll_buttons_ra ();
         poll_buttons_dec ();
+        indicate ();
     }
 }
 
