@@ -92,8 +92,10 @@ int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 6
 
 static char freqnow = FREQ_EAST;
 static char freqtarg = FREQ_SIDEREAL;
+static char raadj = 0;
 static char decadj = 0;
 static char focusadj = 0;
+static char output_inhibit = 1;
 
 /* Interrupt is driven by TMR0 at variable rate.  N.B. Although FREQ_EAST
  * is 0Hz, we still run timer, but with AC output inhibited.
@@ -106,11 +108,11 @@ isr (void)
     char inhibit = 0;
 
     if (TMR0IE && TMR0IF) {
-        if (startup_delay < 500) {
-            inhibit = 1;
+        if (startup_delay < 1000)
             startup_delay++;
-        }
-        if (freqnow == FREQ_EAST)
+        else
+            output_inhibit = 0;
+        if (output_inhibit || freqnow == FREQ_EAST)
             inhibit = 1;
         switch (state) {
             case 0:
@@ -154,7 +156,7 @@ isr (void)
 typedef enum { DB_SETTLING, DB_ON, DB_OFF} db_t;
 
 db_t
-poll_button_debounce (char *dbcount, char val)
+poll_button_debounce (int *dbcount, char val)
 {
     db_t res = DB_SETTLING;
 
@@ -175,20 +177,24 @@ poll_button_debounce (char *dbcount, char val)
 void
 poll_buttons_ra (void)
 {
-    static char ecount = 0;
-    static char wcount = 0;
+    static int ecount = 0;
+    static int wcount = 0;
     db_t e, w;
 
     e = poll_button_debounce (&ecount, !SW_EAST);
     w = poll_button_debounce (&wcount, !SW_WEST);
     if (e == DB_SETTLING || w == DB_SETTLING)
         return;
-    if (e == DB_ON && w == DB_OFF)
+    if (e == DB_ON && w == DB_OFF) {
         freqtarg = FREQ_EAST;
-    else if (w == DB_ON && e == DB_OFF)
+        raadj = 1;
+    } else if (w == DB_ON && e == DB_OFF) {
         freqtarg = FREQ_WEST;
-    else
+        raadj = 1;
+    } else {
         freqtarg = FREQ_SIDEREAL;
+        raadj = 0;
+    }
 }
 
 typedef enum { DEC_OFF, DEC_NORTH, DEC_SOUTH } dec_t;
@@ -198,7 +204,7 @@ set_dec_motor (dec_t want)
 {
     static dec_t cur = DEC_OFF;
 
-    if (cur == want)
+    if (cur == want || output_inhibit)
         return;
     switch (want) {
         case DEC_OFF:
@@ -226,8 +232,8 @@ set_dec_motor (dec_t want)
 void
 poll_buttons_dec (void)
 {
-    static char ncount = 0;
-    static char scount = 0;
+    static int ncount = 0;
+    static int scount = 0;
     db_t n, s;
 
     n = poll_button_debounce (&ncount, !SW_NORTH);
@@ -246,10 +252,18 @@ poll_buttons_dec (void)
 void
 indicate(void)
 {
-    if (freqnow != FREQ_SIDEREAL || decadj || focusadj)
-        LED = 0;
-    else
-        LED = 1;
+    if (output_inhibit) {
+        static int counter = 0;
+        if (++counter == 5000) {
+            LED = !LED;
+            counter = 0;
+        }
+    } else { 
+        if (decadj || focusadj || raadj)
+            LED = 0;
+        else
+            LED = 1;
+    }
 }
 
 void
