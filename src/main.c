@@ -40,12 +40,12 @@ __CONFIG (4, LVP_OFF);
 #endif
 
 #define SW_NORTH        PORTAbits.RA5
-#define SW_SOUTH        PORTAbits.RA4 // FIXME: ADC
+#define SW_SOUTH        PORTAbits.RA4	// FIXME: use ADC for focus button
 #define SW_EAST         PORTAbits.RA3
-#define SW_WEST         PORTAbits.RA2 // FIXME: ADC
+#define SW_WEST         PORTAbits.RA2	// FIXME: use ADC for focus button
 #define PORTA_INPUTS    0b00111100
-#define PORTA_PULLUPS   0b00111100
-#define PORTA_IOC       0b00111100
+#define PORTA_PULLUPS   0b00101000	// external p/u on RA2, RA4
+#define PORTA_IOC       0
 
 #define SQWAVE          PORTBbits.RB7
 #define FOCOUT          PORTBbits.RB5
@@ -93,30 +93,16 @@ int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 6
 static char freqnow = FREQ_EAST;
 static char freqtarg = FREQ_SIDEREAL;
 
+/* Interrupt is driven by TMR0 at variable rate.
+ * Freq: (60 to 120Hz)*4, Period: 2 to 4ms.
+ * (N.B. FREQ_EAST is 0Hz, but we run the timer with AC output inhibited.
+ */
 void interrupt
 isr (void)
 {
     static char state = 0;
-    static int startdelay = 60;
 
-    if (RABIE && RABIF) {
-        if (!SW_EAST && SW_WEST)
-            freqtarg = FREQ_EAST;
-        else if (SW_EAST && !SW_WEST)
-            freqtarg = FREQ_WEST;
-        else
-            freqtarg = FREQ_SIDEREAL;
-        RABIF = 0;
-    }
     if (TMR0IE && TMR0IF) {
-        if (startdelay > 0) {
-            startdelay--;
-            goto done;
-        }
-        if (freqnow == FREQ_EAST)
-            LED = 1; /* LED off */
-        else
-            LED = 0; /* LED on */
         switch (state) {
             case 0:
                 if (freqnow != FREQ_EAST) {
@@ -148,9 +134,6 @@ isr (void)
                     freqnow--;
                 break;
         }
-        GONORTH = !SW_NORTH;
-        GOSOUTH = !SW_SOUTH;
-done:
         TMR0 = freq[freqnow] + FUDGE_COUNT;
         TMR0IF = 0;
     }
@@ -204,7 +187,16 @@ main(void)
     TMR0ON = 1;                     /* start timer */
 
     for (;;) {
-        /* FIXME arrange to sleep instead of busywait? */
+	/* FIXME: need debounce? */
+	/* FIXME: use ADC on SW_WEST, SW_SOUTH */
+        if (!SW_EAST && SW_WEST)
+            freqtarg = FREQ_EAST;
+        else if (SW_EAST && !SW_WEST)
+            freqtarg = FREQ_WEST;
+        else
+            freqtarg = FREQ_SIDEREAL;
+        GONORTH = !SW_NORTH;
+        GOSOUTH = !SW_SOUTH;
     }
 }
 
