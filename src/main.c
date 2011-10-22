@@ -93,38 +93,47 @@ int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 6
 static char freqnow = FREQ_EAST;
 static char freqtarg = FREQ_SIDEREAL;
 
-/* Interrupt is driven by TMR0 at variable rate.
- * Freq: (60 to 120Hz)*4, Period: 2 to 4ms.
- * (N.B. FREQ_EAST is 0Hz, but we run the timer with AC output inhibited.
+/* Interrupt is driven by TMR0 at variable rate.  N.B. Although FREQ_EAST
+ * is 0Hz, we still run timer, but with AC output inhibited.
  */
 void interrupt
 isr (void)
 {
     static char state = 0;
+    static int startup_delay = 0;
+    char inhibit = 0;
 
     if (TMR0IE && TMR0IF) {
+        if (startup_delay < 500) {
+            inhibit = 1;
+            startup_delay++;
+        }
+        if (freqnow == FREQ_EAST)
+            inhibit = 1;
         switch (state) {
             case 0:
-                if (freqnow != FREQ_EAST) {
+                if (!inhibit) {
                     SQWAVE = 1;
+                    NOP ();
                     PHASE1 = 1;
                 }
                 state = 1;
                 break;
             case 1:
-                if (freqnow != FREQ_EAST)
+                if (!inhibit)
                     PHASE1 = 0;
                 state = 2;
                 break;
             case 2:
-                if (freqnow != FREQ_EAST) {
+                if (!inhibit) {
                     SQWAVE = 0;
+                    NOP ();
                     PHASE2 = 1;
                 }
                 state = 3;
                 break;
             case 3:
-                if (freqnow != FREQ_EAST)
+                if (!inhibit)
                     PHASE2 = 0;
                 state = 0;
                 /* Cycle completed - change timer count? */
@@ -136,6 +145,96 @@ isr (void)
         }
         TMR0 = freq[freqnow] + FUDGE_COUNT;
         TMR0IF = 0;
+    }
+}
+
+#define DEBOUNCE_THRESH 100
+typedef enum { DB_SETTLING, DB_ON, DB_OFF} db_t;
+
+db_t
+poll_button_debounce (char *dbcount, char val)
+{
+    db_t res = DB_SETTLING;
+
+    if (val) {
+        if (*dbcount == DEBOUNCE_THRESH)
+            res = DB_ON;
+        else
+            (*dbcount)++;
+    } else {
+        if (*dbcount == 0)
+            res = DB_OFF;
+        else
+            (*dbcount)--;
+    }
+    return res;
+}
+
+void
+poll_buttons_ra (void)
+{
+    static char ecount = 0;
+    static char wcount = 0;
+    db_t e, w;
+
+    e = poll_button_debounce (&ecount, !SW_EAST);
+    w = poll_button_debounce (&wcount, !SW_WEST);
+    if (e == DB_SETTLING || w == DB_SETTLING)
+        return;
+    if (e == DB_ON && w == DB_OFF)
+        freqtarg = FREQ_EAST;
+    else if (w == DB_ON && e == DB_OFF)
+        freqtarg = FREQ_WEST;
+    else
+        freqtarg = FREQ_SIDEREAL;
+}
+
+typedef enum { DEC_OFF, DEC_NORTH, DEC_SOUTH } dec_t;
+
+void
+set_dec_motor (dec_t want)
+{
+    static dec_t cur = DEC_OFF;
+
+    if (cur == want)
+        return;
+    switch (want) {
+        case DEC_OFF:
+            GONORTH = 0;
+            NOP ();
+            GOSOUTH = 0;
+            break;
+        case DEC_NORTH:
+            GONORTH = 1;
+            NOP ();
+            GOSOUTH = 0;
+            break;
+        case DEC_SOUTH:
+            GONORTH = 0;
+            NOP ();
+            GOSOUTH = 1;
+            break;
+    }
+    cur = want;
+}
+
+void
+poll_buttons_dec (void)
+{
+    static char ncount = 0;
+    static char scount = 0;
+    db_t n, s;
+
+    n = poll_button_debounce (&ncount, !SW_NORTH);
+    s = poll_button_debounce (&scount, !SW_SOUTH);
+    if (n == DB_SETTLING || s == DB_SETTLING)
+        return;
+    if (n == DB_ON && s == DB_OFF)
+        set_dec_motor (DEC_NORTH);
+    else if (s == DB_ON && n == DB_OFF)
+        set_dec_motor (DEC_SOUTH);
+    else {
+        set_dec_motor (DEC_OFF);
     }
 }
 
@@ -155,7 +254,7 @@ main(void)
     //RABIE = 1;                /* enable interrupt on change PORTA and B */
 
     TRISA = PORTA_INPUTS;
-    WPUA = PORTA_PULLUPS;       /* enable weak pullups (needed with RABPU) */
+    WPUA = PORTA_PULLUPS;       /* enable specific weak pullups */
     IOCA = PORTA_IOC;           /* interrupt on change */
 
     TRISB = PORTB_INPUTS;
@@ -168,10 +267,10 @@ main(void)
     PHASE2 = 0;
     SQWAVE = 0;
     PWM = 1; /* TODO: enable PWM - for now set high */
-    GONORTH = 0;
-    GOSOUTH = 0;
     FOCIN = 0;
     FOCOUT = 0;
+    GONORTH = 0;
+    GOSOUTH = 0;
     LED = 1; /* LED off */
 
     /* Timer 0 configuration
@@ -187,16 +286,8 @@ main(void)
     TMR0ON = 1;                     /* start timer */
 
     for (;;) {
-	/* FIXME: need debounce? */
-	/* FIXME: use ADC on SW_WEST, SW_SOUTH */
-        if (!SW_EAST && SW_WEST)
-            freqtarg = FREQ_EAST;
-        else if (SW_EAST && !SW_WEST)
-            freqtarg = FREQ_WEST;
-        else
-            freqtarg = FREQ_SIDEREAL;
-        GONORTH = !SW_NORTH;
-        GOSOUTH = !SW_SOUTH;
+        poll_buttons_ra ();
+        poll_buttons_dec ();
     }
 }
 
