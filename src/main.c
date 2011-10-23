@@ -39,12 +39,14 @@ __CONFIG (4, LVP_OFF);
 #error Config bits may need attention for non-18F14K22 chip.
 #endif
 
+#define ADC_SOUTH       3
+#define ADC_WEST        2
 #define SW_NORTH        PORTAbits.RA5
-#define SW_SOUTH        PORTAbits.RA4   // FIXME: use ADC for focus button
+#define SW_SOUTH        PORTAbits.RA4   /* read via AN3 */
 #define SW_EAST         PORTAbits.RA3
-#define SW_WEST         PORTAbits.RA2   // FIXME: use ADC for focus button
+#define SW_WEST         PORTAbits.RA2   /* read via AN2 */
 #define PORTA_INPUTS    0b00111100
-#define PORTA_PULLUPS   0b00101000      // external p/u on RA2, RA4
+#define PORTA_PULLUPS   0b00101000      /* external p/u on RA2, RA4 */
 #define PORTA_IOC       0
 
 #define SQWAVE          PORTBbits.RB7
@@ -152,11 +154,32 @@ isr (void)
     }
 }
 
+typedef enum { ADC_OFF, ADC_MID, ADC_ON } adc_t;
+
+/* voltages 0-5V scaled to 10b ADC resolution */
+#define SCALED_2V  409
+#define SCALED_4V  819
+
+adc_t
+read_button_adc (char chs)
+{
+    int result;
+    adc_t res;
+
+    ADCON0bits.CHS = chs;               /* select input channel */
+    ADCON0bits.GO_DONE = 1;             /* start conversion */
+    while (ADCON0bits.GO_DONE)          /* wait for result */
+        NOP ();
+    result = (((int)ADRESH)<<8) | ADRESL;
+    return (result < SCALED_2V ? ADC_OFF :
+            result > SCALED_4V ? ADC_ON : ADC_MID);
+}
+
 #define DEBOUNCE_THRESH 100
 typedef enum { DB_SETTLING, DB_ON, DB_OFF} db_t;
 
 db_t
-poll_button_debounce (int *dbcount, char val)
+read_button_debounce (int *dbcount, char val)
 {
     db_t res = DB_SETTLING;
 
@@ -174,28 +197,6 @@ poll_button_debounce (int *dbcount, char val)
     return res;
 }
 
-void
-poll_buttons_ra (void)
-{
-    static int ecount = 0;
-    static int wcount = 0;
-    db_t e, w;
-
-    e = poll_button_debounce (&ecount, !SW_EAST);
-    w = poll_button_debounce (&wcount, !SW_WEST);
-    if (e == DB_SETTLING || w == DB_SETTLING)
-        return;
-    if (e == DB_ON && w == DB_OFF) {
-        freqtarg = FREQ_EAST;
-        raadj = 1;
-    } else if (w == DB_ON && e == DB_OFF) {
-        freqtarg = FREQ_WEST;
-        raadj = 1;
-    } else {
-        freqtarg = FREQ_SIDEREAL;
-        raadj = 0;
-    }
-}
 
 typedef enum { DEC_OFF, DEC_NORTH, DEC_SOUTH } dec_t;
 
@@ -229,23 +230,74 @@ set_dec_motor (dec_t want)
     cur = want;
 }
 
+typedef enum { FOC_OFF, FOC_PLUS, FOC_MINUS} focus_t;
+
 void
-poll_buttons_dec (void)
+set_focus_motor (focus_t want)
+{
+    static focus_t cur = FOC_OFF;
+
+    if (cur == want || output_inhibit)
+        return;
+    switch (want) {
+        case FOC_OFF:
+            FOCIN = 0;
+            NOP ();
+            FOCOUT = 0;
+            focusadj = 0;
+            break;
+        case FOC_PLUS:
+            FOCIN = 1;
+            NOP ();
+            FOCOUT = 0;
+            focusadj = 1;
+            break;
+        case FOC_MINUS:
+            FOCIN = 0;
+            NOP ();
+            FOCOUT = 1;
+            focusadj = 1;
+            break;
+    }
+    cur = want;
+}
+
+void
+poll_buttons (void)
 {
     static int ncount = 0;
-    static int scount = 0;
-    db_t n, s;
+    static int ecount = 0;
+    db_t n, e;
+    adc_t s, w;
 
-    n = poll_button_debounce (&ncount, !SW_NORTH);
-    s = poll_button_debounce (&scount, !SW_SOUTH);
-    if (n == DB_SETTLING || s == DB_SETTLING)
-        return;
-    if (n == DB_ON && s == DB_OFF)
+    n = read_button_debounce (&ncount, !SW_NORTH);      /* dec+ */
+    e = read_button_debounce (&ecount, !SW_EAST);       /* ra+ */
+    s = read_button_adc (ADC_SOUTH);                    /* focus+/dec- */
+    w = read_button_adc (ADC_WEST);                     /* focus-/ra- */
+
+    if (s == ADC_MID && w != ADC_MID)
+        set_focus_motor (FOC_MINUS);
+    else if (s != ADC_MID && w == ADC_MID)
+        set_focus_motor (FOC_PLUS);
+    else if (s != ADC_MID && w != ADC_MID)
+        set_focus_motor (FOC_OFF);
+
+    if (n == DB_ON && s == ADC_ON)
         set_dec_motor (DEC_NORTH);
-    else if (s == DB_ON && n == DB_OFF)
+    else if (n == DB_OFF && s == ADC_OFF)
         set_dec_motor (DEC_SOUTH);
-    else {
+    else if (n == DB_OFF && s != ADC_OFF)
         set_dec_motor (DEC_OFF);
+
+    if (e == DB_ON && w == ADC_ON) {
+        freqtarg = FREQ_EAST;
+        raadj = 1;
+    } else if (e == DB_OFF && w == ADC_OFF) {
+        freqtarg = FREQ_WEST;
+        raadj = 1;
+    } else if (e == DB_OFF && w != ADC_OFF) {
+        freqtarg = FREQ_SIDEREAL;
+        raadj = 0;
     }
 }
 
@@ -279,11 +331,13 @@ main(void)
     ANSEL = 0;                  /* disable all analog inputs */
     ANSELH = 0;                 /*  high byte too */
     RABPU = 0;                  /* enable weak pullups on PORTA and B */
-    //RABIE = 1;                /* enable interrupt on change PORTA and B */
 
     TRISA = PORTA_INPUTS;
     WPUA = PORTA_PULLUPS;       /* enable specific weak pullups */
     IOCA = PORTA_IOC;           /* interrupt on change */
+    ANSELbits.ANS2 = 1;         /* RA2(AN2) and RA4(AN3) will be analog */
+    ANSELbits.ANS3 = 1;
+  
 
     TRISB = PORTB_INPUTS;
     WPUB = PORTB_PULLUPS;
@@ -301,6 +355,15 @@ main(void)
     GOSOUTH = 0;
     LED = 1; /* LED off */
 
+    /* Configure ADC
+     */
+    ADCON2bits.ADCS = 6;            /* conv clock = Fosc/64 */
+    ADCON1bits.PVCFG = 0;           /* ref to Vdd */
+    ADCON1bits.NVCFG = 0;           /* ref to Vss */
+    ADCON2bits.ADFM = 1;            /* right justified output fmt */
+    ADCON2bits.ACQT = 5;            /* 12 Tad time */
+    ADCON0bits.ADON = 1;            /* enable adc */
+
     /* Timer 0 configuration
      */ 
     T0CONbits.T0PS = PRESCALER;     /* set prescaler value */
@@ -314,8 +377,7 @@ main(void)
     TMR0ON = 1;                     /* start timer */
 
     for (;;) {
-        poll_buttons_ra ();
-        poll_buttons_dec ();
+        poll_buttons ();
         indicate ();
     }
 }
