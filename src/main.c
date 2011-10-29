@@ -80,76 +80,90 @@ int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 6
 #error unsupported MOTOR_HZ
 #endif
 
-static char freqnow = FREQ_EAST;
-static char freqtarg = FREQ_SIDEREAL;
 static char adj_ra = 0;
 static char adj_dec = 0;
 static char adj_focus = 0;
+
 static char output_inhibit = 1;
 
-/* Interrupt is driven by TMR0 at variable rate.  N.B. Although FREQ_EAST
- * is 0Hz, we still run timer, but with AC output inhibited.
- */
-void interrupt
-isr (void)
+static char ac_freq_now = FREQ_EAST;
+static char ac_freq_targ = FREQ_SIDEREAL;
+
+void
+ac_set_freq (int freq)
+{
+    ac_freq_targ = freq;
+    if (ac_freq_targ != FREQ_SIDEREAL)
+        adj_ra = 1;
+    else
+        adj_ra = 0;
+}
+
+void
+ac_interrupt (void)
 {
     static char state = 0;
     static int startup_delay = 0;
     char inhibit = 0;
 
+    if (startup_delay < 1000)
+        startup_delay++;
+    else
+        output_inhibit = 0;
+    if (output_inhibit || ac_freq_now == FREQ_EAST)
+        inhibit = 1;
+    switch (state) {
+        case 0:
+            if (!inhibit) {
+                SQWAVE = 1;
+                NOP ();
+                PHASE1 = 1;
+            }
+            state = 1;
+            break;
+        case 1:
+            if (!inhibit)
+                PHASE1 = 0;
+            state = 2;
+            break;
+        case 2:
+            if (!inhibit) {
+                SQWAVE = 0;
+                NOP ();
+                PHASE2 = 1;
+            }
+            state = 3;
+            break;
+        case 3:
+            if (!inhibit)
+                PHASE2 = 0;
+            state = 0;
+            /* Cycle completed - change timer count? */
+            if (ac_freq_now < ac_freq_targ)
+                ac_freq_now++;
+            else if (ac_freq_now > ac_freq_targ)
+                ac_freq_now--;
+            break;
+    }
+    TMR0 = freq[ac_freq_now] + FUDGE_COUNT;
+}
+
+void interrupt
+isr (void)
+{
+
     if (TMR0IE && TMR0IF) {
-        if (startup_delay < 1000)
-            startup_delay++;
-        else
-            output_inhibit = 0;
-        if (output_inhibit || freqnow == FREQ_EAST)
-            inhibit = 1;
-        switch (state) {
-            case 0:
-                if (!inhibit) {
-                    SQWAVE = 1;
-                    NOP ();
-                    PHASE1 = 1;
-                }
-                state = 1;
-                break;
-            case 1:
-                if (!inhibit)
-                    PHASE1 = 0;
-                state = 2;
-                break;
-            case 2:
-                if (!inhibit) {
-                    SQWAVE = 0;
-                    NOP ();
-                    PHASE2 = 1;
-                }
-                state = 3;
-                break;
-            case 3:
-                if (!inhibit)
-                    PHASE2 = 0;
-                state = 0;
-                /* Cycle completed - change timer count? */
-                if (freqnow < freqtarg)
-                    freqnow++;
-                else if (freqnow > freqtarg)
-                    freqnow--;
-                break;
-        }
-        TMR0 = freq[freqnow] + FUDGE_COUNT;
+        ac_interrupt ();
         TMR0IF = 0;
     }
 }
 
 typedef enum { ADC_OFF, ADC_MID, ADC_ON } adc_t;
-
 /* voltages 0-5V scaled to 10b ADC resolution */
 #define SCALED_2V  409
 #define SCALED_4V  819
-
 adc_t
-read_button_adc (char chs)
+adc_read (char chs)
 {
     int result;
     adc_t res;
@@ -165,9 +179,8 @@ read_button_adc (char chs)
 
 #define DEBOUNCE_THRESH 100
 typedef enum { DB_SETTLING, DB_ON, DB_OFF} db_t;
-
 db_t
-read_button_debounce (int *dbcount, char val)
+port_read_debounce (int *dbcount, char val)
 {
     db_t res = DB_SETTLING;
 
@@ -185,15 +198,13 @@ read_button_debounce (int *dbcount, char val)
     return res;
 }
 
-
 typedef enum { DEC_OFF, DEC_NORTH, DEC_SOUTH } dec_t;
-
 void
-set_dec_motor (dec_t want)
+dc_set_dec (dec_t want)
 {
     static dec_t cur = DEC_OFF;
 
-    if (cur == want || output_inhibit)
+    if (cur == want)
         return;
     switch (want) {
         case DEC_OFF:
@@ -221,11 +232,11 @@ set_dec_motor (dec_t want)
 typedef enum { FOC_OFF, FOC_PLUS, FOC_MINUS} focus_t;
 
 void
-set_focus_motor (focus_t want)
+dc_set_focus (focus_t want)
 {
     static focus_t cur = FOC_OFF;
 
-    if (cur == want || output_inhibit)
+    if (cur == want)
         return;
     switch (want) {
         case FOC_OFF:
@@ -258,35 +269,31 @@ poll_buttons (void)
     db_t n, e;
     adc_t s, w;
 
-    n = read_button_debounce (&ncount, !SW_NORTH);      /* dec+ */
-    e = read_button_debounce (&ecount, !SW_EAST);       /* ra+ */
-    s = read_button_adc (ADC_SOUTH);                    /* focus+/dec- */
-    w = read_button_adc (ADC_WEST);                     /* focus-/ra- */
+    n = port_read_debounce (&ncount, !SW_NORTH);      /* dec+ */
+    e = port_read_debounce (&ecount, !SW_EAST);       /* ra+ */
+    s = adc_read (ADC_SOUTH);                    /* focus+/dec- */
+    w = adc_read (ADC_WEST);                     /* focus-/ra- */
 
     if (s == ADC_MID && w != ADC_MID)
-        set_focus_motor (FOC_MINUS);
+        dc_set_focus (FOC_MINUS);
     else if (s != ADC_MID && w == ADC_MID)
-        set_focus_motor (FOC_PLUS);
+        dc_set_focus (FOC_PLUS);
     else if (s != ADC_MID && w != ADC_MID)
-        set_focus_motor (FOC_OFF);
+        dc_set_focus (FOC_OFF);
 
     if (n == DB_ON && s == ADC_ON)
-        set_dec_motor (DEC_NORTH);
+        dc_set_dec (DEC_NORTH);
     else if (n == DB_OFF && s == ADC_OFF)
-        set_dec_motor (DEC_SOUTH);
+        dc_set_dec (DEC_SOUTH);
     else if (n == DB_OFF && s != ADC_OFF)
-        set_dec_motor (DEC_OFF);
+        dc_set_dec (DEC_OFF);
 
-    if (e == DB_ON && w == ADC_ON) {
-        freqtarg = FREQ_EAST;
-        adj_ra = 1;
-    } else if (e == DB_OFF && w == ADC_OFF) {
-        freqtarg = FREQ_WEST;
-        adj_ra = 1;
-    } else if (e == DB_OFF && w != ADC_OFF) {
-        freqtarg = FREQ_SIDEREAL;
-        adj_ra = 0;
-    }
+    if (e == DB_ON && w == ADC_ON)
+        ac_set_freq (FREQ_EAST);
+    else if (e == DB_OFF && w == ADC_OFF)
+        ac_set_freq (FREQ_WEST);
+    else if (e == DB_OFF && w != ADC_OFF)
+        ac_set_freq (FREQ_SIDEREAL);
 }
 
 typedef enum { LED_OFF, LED_ON } led_t;
@@ -321,16 +328,13 @@ indicate(void)
 void
 main(void)
 {
-    /* Configure HFOSC for desired system clock frequency.
-     */
-    OSCCONbits.IRCF = 7;
-    //OSCTUNEbits.TUN = 0x1f;
+    OSCCONbits.IRCF = 7;	/* system clock HFOSC 16 MHz (x 4 with PLL) */
 
     /* Port configuration
      */
     ANSEL = 0;                  /* disable all analog inputs */
-    ANSELH = 0;                 /*  high byte too */
-    RABPU = 0;                  /* enable weak pullups on PORTA and B */
+    ANSELH = 0;
+    RABPU = 0;                  /* enable weak pullups reature */
 
     TRISA = PORTA_INPUTS;
     WPUA = PORTA_PULLUPS;       /* enable specific weak pullups */
@@ -372,7 +376,7 @@ main(void)
     TMR0IE = 1;                     /* enable timer0 interrupt */
     PEIE = 1;                       /* enable peripheral interrupts */
     GIE = 1;                        /* enable global interrupts */
-    TMR0 = freq[freqnow];           /* load count */
+    TMR0 = freq[ac_freq_now];           /* load count */
     TMR0ON = 1;                     /* start timer */
 
     for (;;) {
