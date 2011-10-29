@@ -32,7 +32,7 @@ __CONFIG (2, BOREN_OFF & WDTEN_OFF);
 __CONFIG (3, HFOFST_OFF & MCLRE_OFF);
 __CONFIG (4, LVP_OFF);
 #else
-#error Config bits may need attention for non-18F14K22 chip.
+#error code assumes 18F14K22 chip.
 #endif
 
 #define ADC_SOUTH       3
@@ -66,7 +66,6 @@ int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 6
 #define FUDGE_COUNT 500 /* FIXME shouldn't need this */
 
 #define PRESCALER       2 /* 1:8 */
-#define IRCF_VAL        7
 
 #define FREQ_EAST       0 /* special:  turn off motor, but leave timer on */
 #define FREQ_LUNAR      4
@@ -83,9 +82,9 @@ int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 6
 
 static char freqnow = FREQ_EAST;
 static char freqtarg = FREQ_SIDEREAL;
-static char raadj = 0;
-static char decadj = 0;
-static char focusadj = 0;
+static char adj_ra = 0;
+static char adj_dec = 0;
+static char adj_focus = 0;
 static char output_inhibit = 1;
 
 /* Interrupt is driven by TMR0 at variable rate.  N.B. Although FREQ_EAST
@@ -201,19 +200,19 @@ set_dec_motor (dec_t want)
             GONORTH = 0;
             NOP ();
             GOSOUTH = 0;
-            decadj = 0;
+            adj_dec = 0;
             break;
         case DEC_NORTH:
             GONORTH = 1;
             NOP ();
             GOSOUTH = 0;
-            decadj = 1;
+            adj_dec = 1;
             break;
         case DEC_SOUTH:
             GONORTH = 0;
             NOP ();
             GOSOUTH = 1;
-            decadj = 1;
+            adj_dec = 1;
             break;
     }
     cur = want;
@@ -233,19 +232,19 @@ set_focus_motor (focus_t want)
             FOCIN = 0;
             NOP ();
             FOCOUT = 0;
-            focusadj = 0;
+            adj_focus = 0;
             break;
         case FOC_PLUS:
             FOCIN = 1;
             NOP ();
             FOCOUT = 0;
-            focusadj = 1;
+            adj_focus = 1;
             break;
         case FOC_MINUS:
             FOCIN = 0;
             NOP ();
             FOCOUT = 1;
-            focusadj = 1;
+            adj_focus = 1;
             break;
     }
     cur = want;
@@ -280,14 +279,26 @@ poll_buttons (void)
 
     if (e == DB_ON && w == ADC_ON) {
         freqtarg = FREQ_EAST;
-        raadj = 1;
+        adj_ra = 1;
     } else if (e == DB_OFF && w == ADC_OFF) {
         freqtarg = FREQ_WEST;
-        raadj = 1;
+        adj_ra = 1;
     } else if (e == DB_OFF && w != ADC_OFF) {
         freqtarg = FREQ_SIDEREAL;
-        raadj = 0;
+        adj_ra = 0;
     }
+}
+
+typedef enum { LED_OFF, LED_ON } led_t;
+void
+port_led_set (led_t val)
+{
+    LED = (val == LED_OFF ? 1 : 0);
+}
+void
+port_led_toggle (void)
+{
+    LED = !LED;
 }
 
 void
@@ -296,14 +307,14 @@ indicate(void)
     if (output_inhibit) {
         static int counter = 0;
         if (++counter == 5000) {
-            LED = !LED;
+            port_led_toggle ();
             counter = 0;
         }
     } else { 
-        if (decadj || focusadj || raadj)
-            LED = 0;
+        if (adj_dec || adj_focus || adj_ra)
+            port_led_set (LED_ON);
         else
-            LED = 1;
+            port_led_set (LED_OFF); 
     }
 }
 
@@ -312,7 +323,7 @@ main(void)
 {
     /* Configure HFOSC for desired system clock frequency.
      */
-    OSCCONbits.IRCF = IRCF_VAL;
+    OSCCONbits.IRCF = 7;
     //OSCTUNEbits.TUN = 0x1f;
 
     /* Port configuration
@@ -327,7 +338,6 @@ main(void)
     ANSELbits.ANS2 = 1;         /* RA2(AN2) and RA4(AN3) will be analog */
     ANSELbits.ANS3 = 1;
   
-
     TRISB = PORTB_INPUTS;
     WPUB = PORTB_PULLUPS;
     IOCB = PORTB_IOC;
@@ -342,7 +352,7 @@ main(void)
     FOCOUT = 0;
     GONORTH = 0;
     GOSOUTH = 0;
-    LED = 1; /* LED off */
+    port_led_set (LED_OFF);
 
     /* Configure ADC
      */
