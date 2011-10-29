@@ -410,7 +410,7 @@ main(void)
 
     /* DC motor config
      */
-    PWM = 1; /* TODO: enable PWM - for now set high */
+    PWM = 1;                    /* TODO: enable PWM - for now set high */
     FOCIN = 0;
     FOCOUT = 0;
     GONORTH = 0;
@@ -421,16 +421,16 @@ main(void)
     PHASE1 = 0;
     PHASE2 = 0;
     SQWAVE = 0;
-    T0CONbits.T0PS = 2;             /* set prescaler to 1:8 (see genfreq.c) */
-    PSA = 0;                        /* assign prescaler */
-    T0CS = 0;                       /* use instr cycle clock (CLOCK_FREQ/4) */
-    T08BIT = 0;                     /* 16 bit mode */
-    TMR0IE = 1;                     /* enable timer0 interrupt */
-    TMR0 = freq[ac_freq_now];       /* load count */
+    T0CONbits.T0PS = 2;         /* set prescaler to 1:8 (see genfreq.c) */
+    PSA = 0;                    /* assign prescaler */
+    T0CS = 0;                   /* use instr cycle clock (CLOCK_FREQ/4) */
+    T08BIT = 0;                 /* 16 bit mode */
+    TMR0IE = 1;                 /* enable timer0 interrupt */
+    TMR0 = freq[ac_freq_now];   /* load count */
 
-    PEIE = 1;                       /* enable peripheral interrupts */
-    GIE = 1;                        /* enable global interrupts */
-    TMR0ON = 1;                     /* start timer0 */
+    PEIE = 1;                   /* enable peripheral interrupts */
+    GIE = 1;                    /* enable global interrupts */
+    TMR0ON = 1;                 /* start timer0 */
     for (;;) {
         poll_buttons ();
         indicate ();
