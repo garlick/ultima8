@@ -257,7 +257,7 @@ dc_set_dec (dec_t want)
 {
     static dec_t cur = DEC_OFF;
 
-    if (cur == want)
+    if (cur == want || output_inhibit)
         return;
     switch (want) {
         case DEC_OFF:
@@ -289,7 +289,7 @@ dc_set_focus (focus_t want)
 {
     static focus_t cur = FOC_OFF;
 
-    if (cur == want)
+    if (cur == want || output_inhibit)
         return;
     switch (want) {
         case FOC_OFF:
