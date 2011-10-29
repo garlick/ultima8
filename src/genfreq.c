@@ -8,6 +8,8 @@
 #define ALCOR_LUNAR_50 48.912
 #define ALCOR_LUNAR_60 58.696
 
+#define CLOCK_FREQ 64000000
+
 double
 mfreq (int count, double countfreq)
 {

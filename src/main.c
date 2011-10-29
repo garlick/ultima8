@@ -27,11 +27,7 @@
 #include <htc.h>
 
 #if defined(_18F14K22)
-#if (CLOCK_FREQ == 64000000)
 __CONFIG (1, FOSC_IRC & PLLEN_ON);  /* system clock is HFOSC*4 */
-#elif (CLOCK_FREQ == 16000000)
-__CONFIG (1, FOSC_IRC);
-#endif
 __CONFIG (2, BOREN_OFF & WDTEN_OFF);
 __CONFIG (3, HFOFST_OFF & MCLRE_OFF);
 __CONFIG (4, LVP_OFF);
@@ -69,15 +65,8 @@ int freq60[] = {31693, 31693, 48359, 53915, 56508, 56693, 58359, 59470, 60264, 6
 int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 60859};
 #define FUDGE_COUNT 500 /* FIXME shouldn't need this */
 
-#if (CLOCK_FREQ == 64000000)
 #define PRESCALER       2 /* 1:8 */
 #define IRCF_VAL        7
-#elif (CLOCK_FREQ == 16000000)
-#define PRESCALER       0 /* 1:2 */
-#define IRCF_VAL        7
-#else
-#error unsupported CLOCK_FREQ
-#endif
 
 #define FREQ_EAST       0 /* special:  turn off motor, but leave timer on */
 #define FREQ_LUNAR      4
