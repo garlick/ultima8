@@ -35,6 +35,8 @@ __CONFIG (4, LVP_OFF);
 #error code assumes 18F14K22 chip.
 #endif
 
+#define I2C_ADDR        8
+
 #define ADC_SOUTH       3
 #define ADC_WEST        2
 #define SW_NORTH        PORTAbits.RA5
@@ -143,13 +145,69 @@ ac_interrupt (void)
     TMR0 = freq[ac_freq_now] + FUDGE_COUNT;
 }
 
+/* See AN734 for I2C slave state descriptions
+ */
+void
+i2c_interrupt (void)
+{
+    static unsigned char data[16] = { 42, 43, 44 };
+    static unsigned char count = 0;
+    unsigned char dummy;
+
+    // State 1: I2C write operation, last byte was an address byte
+    // SSPSTAT bits: S = 1, D_A = 0, R_W = 0, BF = 1
+    if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 0
+                           && SSPSTATbits.R_W == 0
+                           && SSPSTATbits.BF == 1) {
+        count = 0;
+        dummy = SSPBUF; /* read address and discard */
+
+    // State 2: I2C write operation, last byte was a data byte
+    // SSPSTAT bits: S = 1, D_A = 1, R_W = 0, BF = 1
+    } else if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
+                                  && SSPSTATbits.R_W == 0
+                                  && SSPSTATbits.BF == 1) {
+        if (count < sizeof(data)/sizeof(data[0]))
+            data[count++] = SSPBUF;
+
+    // State 3: I2C read operation, last byte was an address byte
+    // SSPSTAT bits: S = 1, D_A = 0, R_W = 1
+    } else if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 0
+                                  && SSPSTATbits.R_W == 1) {
+        count = 0;
+        SSPBUF = data[count++];
+        SSPCON1bits.CKP = 1;
+
+    // State 4: I2C read operation, last byte was a data byte
+    // SSPSTAT bits: S = 1, D_A = 1, R_W = 1, BF = 0
+    } else if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
+                                  && SSPSTATbits.R_W == 1
+                                  && SSPSTATbits.BF == 0) {
+       
+        if (count < sizeof(data)/sizeof(data[0])) {
+            SSPBUF = data[count++];
+            SSPCON1bits.CKP = 1;
+        }
+    
+    // State 5: Slave I2C logic reset by NACK from master
+    // SSPSTAT bits: S = 1, D_A = 1, BF = 0, CKP = 1
+    } else if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
+                                  && SSPSTATbits.BF == 0
+                                  && SSPCON1bits.CKP == 1) {
+        count = 0;
+    }
+}
+
 void interrupt
 isr (void)
 {
-
     if (TMR0IE && TMR0IF) {
         ac_interrupt ();
         TMR0IF = 0;
+    }
+    if (SSPIE && SSPIF) {
+        i2c_interrupt ();
+        SSPIF = 0;
     }
 }
 
@@ -335,9 +393,17 @@ main(void)
     IOCA = 0;                   /* disable all interrupt on change bits */
     IOCB = 0; 
 
+    /* I2C config
+     */
+    TRISBbits.RB4 = 1;          /* SDA */
+    TRISBbits.RB6 = 1;          /* SCL */
+    SSPCON1bits.SSPEN = 1;      /* enable MSSP peripheral */
+    SSPCON1bits.SSPM = 6;       /* I2C slave mode, 7-bit address */
+    SSPADD = I2C_ADDR << 1;     /* set address */
+    SSPIE = 1;                  /* enable SSP interrupt */
+
     /* Digital input config
      */
-    ANSEL = 0;                  /* disable all analog inputs */
     //TRISAbits.RA3 = 1;        /* RA3 is input (the only option) */
     RABPU = 0;                  /* enable weak pullups feature */
     WPUAbits.WPUA3 = 1;         /* pullup on RA3 */
