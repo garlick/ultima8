@@ -9,6 +9,7 @@
 #define ALCOR_LUNAR_60 58.696
 
 #define CLOCK_FREQ 64000000
+#define PRESCALER_RATIO 8
 
 double
 mfreq (int count, double countfreq)
@@ -37,21 +38,8 @@ main (int argc, char *argv[])
 		50,		/* 11 sidereal 50hz */
 	 };
 	int val[12] = { 0,0,0,0,0,0,0,0,0,0,0 };
-	double prescaler;
-	double countfreq;
-
-	if (argc != 2) {
-		fprintf (stderr, "Usage: genfreq prescaler\n");
-		exit (1);
-	}
-	prescaler = strtod (argv[1], NULL);
-	if (prescaler != 2 && prescaler != 4 && prescaler != 8 &&
-	    prescaler != 16 && prescaler != 32 && prescaler != 64 &&
-	    prescaler != 128 && prescaler != 256) {
-		fprintf (stderr, "genfreq: prescaler must be 2,4,8,16,32,64,128,256\n");
-		exit (1);
-	}
-        countfreq = (double)CLOCK_FREQ/(4*prescaler);
+	double prescaler = PRESCALER_RATIO;
+	double countfreq = (double)CLOCK_FREQ/(4*prescaler);
 
 	for (i = 0; i < 256*256; i++) {
 		for (j = 0; j < 12; j++) {
@@ -62,6 +50,7 @@ main (int argc, char *argv[])
 		}
 	}
 
+	printf ("/*\n");
 	printf("speed\ttarget\t\tcount\terror\n");
 	for (j = 0; j < 12; j++)
 		printf ("%d:\t%f\t%d\t%+f\t%s\n", j, targ[j], val[j],
@@ -70,27 +59,24 @@ main (int argc, char *argv[])
 			j == 5 ? "60hz sidereal" :
 			j == 10 ? "50hz lunar" :
 			j == 11 ? "50hz sidereal" : "");
+	printf ("*/\n\n");
 
-	printf ("/* generated with ./genfreq %.0f (CLOCK_FREQ=%d) */\n",
+	printf ("/* generated with genfreq - DO NOT EDIT */\n",
 		prescaler, CLOCK_FREQ);
-	printf ("int freq60[] = {");
+#if (MOTOR_HZ == 60)
+	printf ("int freq[] = {");
 	for (j = 0; j < 10; j++)
 		printf ("%d%s", val[j], j < 9 ? ", " : "};\n");
-
-	printf ("int freq50[] = {");
+#elif (MOTOR_HZ == 50)
+	printf ("int freq[] = {");
 	for (j = 0; j < 4; j++)
 		printf ("%d, ", val[j]);
 	printf ("%d, ", val[10]);
 	printf ("%d, ", val[11]);
 	for (j = 6; j < 10; j++)
 		printf ("%d%s", val[j], j < 9 ? ", " : "};\n");
-	printf ("#define PRESCALER\t%d /* 1:%.0f */\n",
-		prescaler == 2 ? 0 :
-		prescaler == 4 ? 1 :
-		prescaler == 8 ? 2 :
-		prescaler == 16 ? 3 :
-		prescaler == 32 ? 4 :
-		prescaler == 64 ? 5 :
-		prescaler == 128 ? 6 : 7,
-		prescaler);
+#else
+#error unsupported MOTOR_HZ
+#endif
+	exit (0);
 }

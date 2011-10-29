@@ -26,6 +26,8 @@
 
 #include <htc.h>
 
+#include "freq.h"
+
 #if defined(_18F14K22)
 __CONFIG (1, FOSC_IRC & PLLEN_ON);  /* system clock is HFOSC*4 */
 __CONFIG (2, BOREN_OFF & WDTEN_OFF);
@@ -57,25 +59,10 @@ __CONFIG (4, LVP_OFF);
 #define GONORTH         PORTCbits.RC1
 #define GOSOUTH         PORTCbits.RC0
 
-/* generated with ./genfreq 8 (CLOCK_FREQ=64000000) */
-int freq60[] = {31693, 31693, 48359, 53915, 56508, 56693, 58359, 59470, 60264, 60859};
-int freq50[] = {31693, 31693, 48359, 53915, 54804, 55026, 58359, 59470, 60264, 60859};
-#define FUDGE_COUNT 500 /* FIXME shouldn't need this */
-
-#define PRESCALER       2 /* 1:8 */
-
 #define FREQ_EAST       0 /* special:  turn off motor, but leave timer on */
 #define FREQ_LUNAR      4
 #define FREQ_SIDEREAL   5
 #define FREQ_WEST       9
-
-#if (MOTOR_HZ == 60)
-#define freq freq60
-#elif (MOTOR_HZ == 50)
-#define freq freq50
-#else
-#error unsupported MOTOR_HZ
-#endif
 
 static char adj_ra = 0;
 static char adj_dec = 0;
@@ -85,6 +72,8 @@ static char output_inhibit = 1;
 
 static char ac_freq_now = FREQ_EAST;
 static char ac_freq_targ = FREQ_SIDEREAL;
+
+#define FUDGE_COUNT 500 /* FIXME shouldn't need this */
 
 void
 ac_set_freq (int freq)
@@ -436,7 +425,7 @@ main(void)
     PHASE1 = 0;
     PHASE2 = 0;
     SQWAVE = 0;
-    T0CONbits.T0PS = PRESCALER;     /* set prescaler value */
+    T0CONbits.T0PS = 2;             /* set prescaler to 1:8 (see genfreq.c) */
     PSA = 0;                        /* assign prescaler */
     T0CS = 0;                       /* use instr cycle clock (CLOCK_FREQ/4) */
     T08BIT = 0;                     /* 16 bit mode */
