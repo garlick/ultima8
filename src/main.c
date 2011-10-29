@@ -42,11 +42,7 @@ __CONFIG (4, LVP_OFF);
 #define ADC_SOUTH       3
 #define ADC_WEST        2
 #define SW_NORTH        PORTAbits.RA5
-#define SW_SOUTH        PORTAbits.RA4   /* read via AN3 */
 #define SW_EAST         PORTAbits.RA3
-#define SW_WEST         PORTAbits.RA2   /* read via AN2 */
-#define PORTA_INPUTS    0b00111100
-#define PORTA_PULLUPS   0b00101000      /* external p/u on RA2, RA4 */
 
 #define SQWAVE          PORTBbits.RB7
 #define FOCOUT          PORTBbits.RB5
