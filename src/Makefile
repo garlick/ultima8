@@ -16,7 +16,7 @@ clean:
 # -M     erase/program/verify all memory regions
 # -R -T  power and release MCLR after operations
 pgm: main.hex
-	pk2cmd -PPIC$(CHIP) -F$< -M -R -T
+	pk2cmd -PPIC$(CHIP) -F$< -M
 # verify that pk2cmd sees a programmer
 pk2ver:
 	sudo chmod 666 /dev/pickit*
