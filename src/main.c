@@ -43,13 +43,9 @@ __CONFIG (4, LVP_OFF);
 #define SW_WEST         PORTAbits.RA2   /* read via AN2 */
 #define PORTA_INPUTS    0b00111100
 #define PORTA_PULLUPS   0b00101000      /* external p/u on RA2, RA4 */
-#define PORTA_IOC       0
 
 #define SQWAVE          PORTBbits.RB7
 #define FOCOUT          PORTBbits.RB5
-#define PORTB_INPUTS    0b00000000
-#define PORTB_PULLUPS   0b00000000
-#define PORTB_IOC       0
 
 #define LED             PORTCbits.RC7
 #define PWM             PORTCbits.RC5
@@ -58,7 +54,6 @@ __CONFIG (4, LVP_OFF);
 #define FOCIN           PORTCbits.RC2
 #define GONORTH         PORTCbits.RC1
 #define GOSOUTH         PORTCbits.RC0
-#define PORTC_INPUTS    0b00000000
 
 /* generated with ./genfreq 8 (CLOCK_FREQ=64000000) */
 int freq60[] = {31693, 31693, 48359, 53915, 56508, 56693, 58359, 59470, 60264, 60859};
@@ -328,57 +323,63 @@ indicate(void)
 void
 main(void)
 {
-    OSCCONbits.IRCF = 7;	/* system clock HFOSC 16 MHz (x 4 with PLL) */
+    OSCCONbits.IRCF = 7;        /* system clock HFOSC 16 MHz (x 4 with PLL) */
 
-    /* Port configuration
+    ANSEL = 0;                  /* disable all ADC inputs */
+    ANSELH = 0;
+    TRISA = 0;                  /* disable all digital inputs */
+    TRISB = 0;
+    TRISC = 0;
+    WPUA = 0;                   /* disable all pullups */
+    WPUB = 0;
+    IOCA = 0;                   /* disable all interrupt on change bits */
+    IOCB = 0; 
+
+    /* Digital input config
      */
     ANSEL = 0;                  /* disable all analog inputs */
-    ANSELH = 0;
-    RABPU = 0;                  /* enable weak pullups reature */
+    //TRISAbits.RA3 = 1;        /* RA3 is input (the only option) */
+    RABPU = 0;                  /* enable weak pullups feature */
+    WPUAbits.WPUA3 = 1;         /* pullup on RA3 */
+    TRISAbits.RA5 = 1;          /* RA5 is input */
+    WPUAbits.WPUA5 = 1;         /* pullup on RA5 */
 
-    TRISA = PORTA_INPUTS;
-    WPUA = PORTA_PULLUPS;       /* enable specific weak pullups */
-    IOCA = PORTA_IOC;           /* interrupt on change */
+    /* ADC input config
+     */
+    TRISAbits.RA2 = 1;          /* AN3 */
+    TRISAbits.RA4 = 1;          /* AN2 */ 
     ANSELbits.ANS2 = 1;         /* RA2(AN2) and RA4(AN3) will be analog */
     ANSELbits.ANS3 = 1;
-  
-    TRISB = PORTB_INPUTS;
-    WPUB = PORTB_PULLUPS;
-    IOCB = PORTB_IOC;
+    ADCON2bits.ADCS = 6;        /* conv clock = Fosc/64 */
+    ADCON1bits.PVCFG = 0;       /* ref to Vdd */
+    ADCON1bits.NVCFG = 0;       /* ref to Vss */
+    ADCON2bits.ADFM = 1;        /* right justified output fmt */
+    ADCON2bits.ACQT = 5;        /* 12 Tad time */
+    ADCON0bits.ADON = 1;        /* enable adc */
 
-    TRISC = PORTC_INPUTS;
-
-    PHASE1 = 0;
-    PHASE2 = 0;
-    SQWAVE = 0;
+    /* DC motor config
+     */
     PWM = 1; /* TODO: enable PWM - for now set high */
     FOCIN = 0;
     FOCOUT = 0;
     GONORTH = 0;
     GOSOUTH = 0;
-    port_led_set (LED_OFF);
 
-    /* Configure ADC
-     */
-    ADCON2bits.ADCS = 6;            /* conv clock = Fosc/64 */
-    ADCON1bits.PVCFG = 0;           /* ref to Vdd */
-    ADCON1bits.NVCFG = 0;           /* ref to Vss */
-    ADCON2bits.ADFM = 1;            /* right justified output fmt */
-    ADCON2bits.ACQT = 5;            /* 12 Tad time */
-    ADCON0bits.ADON = 1;            /* enable adc */
-
-    /* Timer 0 configuration
+    /* AC motor config
      */ 
+    PHASE1 = 0;
+    PHASE2 = 0;
+    SQWAVE = 0;
     T0CONbits.T0PS = PRESCALER;     /* set prescaler value */
     PSA = 0;                        /* assign prescaler */
     T0CS = 0;                       /* use instr cycle clock (CLOCK_FREQ/4) */
     T08BIT = 0;                     /* 16 bit mode */
     TMR0IE = 1;                     /* enable timer0 interrupt */
+    TMR0 = freq[ac_freq_now];       /* load count */
+
     PEIE = 1;                       /* enable peripheral interrupts */
     GIE = 1;                        /* enable global interrupts */
-    TMR0 = freq[ac_freq_now];           /* load count */
-    TMR0ON = 1;                     /* start timer */
-
+    TMR0ON = 1;                     /* start timer0 */
     for (;;) {
         poll_buttons ();
         indicate ();
