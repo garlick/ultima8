@@ -1,27 +1,2 @@
-Version 1 Drive Corrector
-
-The v1 drive corrector is Michael Covington's ALCOR design with minor
-modifications.  The inital implementation uses his firmware (./alcor)
-assembled with gpasm on Linux.  Subsequently this was rewritten in C (./src).
-
-Tools
-
-Ubuntu Linux
-	All the development was done on Ubuntu 10.x.  The prereqs below
-	can be apt-get installed from Ubuntu package repos, except HI-TECH C.
-
-geda-gschem
-	Schematic capture program.
-
-gputils
-	PIC toolchain for Linux.
-	Required to build ALCOR firmware (initial implementation only).
-
-picp
-	PIC device programming utility for PICSTART and other programmers.
-
-HI-TECH C Compiler
-	Required to build C firmware.
-	Lite version is a free download from microchip (v9.82).
-	Ensure that the picc bin directory is in your PATH before building.
-
+All of the documentation for this project is on the wiki at:
+  http://code.google.com/p/ultima8drivecorrector/wiki
