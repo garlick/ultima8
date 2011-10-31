@@ -25,6 +25,7 @@
 /* NOTE: compiled with hi-tech C pro V9.80 */
 
 #include <htc.h>
+#include <delays.h>
 
 #include "freq.h"
 
@@ -60,28 +61,35 @@ __CONFIG (4, LVP_OFF);
 #define FREQ_SIDEREAL   5
 #define FREQ_WEST       9
 
-static char adj_ra = 0;
-static char adj_dec = 0;
-static char adj_focus = 0;
+static char buttons = 0;  /* bitmask of depressed handbox buttons */
+static char ibuttons = 0; /* i2c simulated buttons of above */
+#define BUTTON_NORTH    0x01
+#define BUTTON_SOUTH    0x02
+#define BUTTON_EAST     0x04
+#define BUTTON_WEST     0x08
+#define BUTTON_FOCIN    0x10
+#define BUTTON_FOCOUT   0x20
 
 static char output_inhibit = 1;
 
 static char ac_freq_now = FREQ_EAST;
 static char ac_freq_targ = FREQ_SIDEREAL;
 
-#define FUDGE_COUNT 500 /* FIXME shouldn't need this */
-
 void
-ac_set_freq (int freq)
+ac_set_freq (char freq)
 {
-    ac_freq_targ = freq;
-    if (ac_freq_targ != FREQ_SIDEREAL)
-        adj_ra = 1;
-    else
-        adj_ra = 0;
+    if (freq <= FREQ_WEST)
+        ac_freq_targ = freq;
+}
+char 
+ac_get_freq (void)
+{
+    return ac_freq_now;
 }
 
-void
+#define FUDGE_COUNT 500 /* FIXME shouldn't need this */
+
+inline void
 ac_interrupt (void)
 {
     static char state = 0;
@@ -129,57 +137,134 @@ ac_interrupt (void)
     }
     TMR0 = freq[ac_freq_now] + FUDGE_COUNT;
 }
-
-/* See AN734 for I2C slave state descriptions
- */
-void
-i2c_interrupt (void)
+inline unsigned char
+i2c_read (void)
 {
-    static unsigned char data[16] = { 42, 43, 44 };
-    static unsigned char count = 0;
-    unsigned char dummy;
+    return SSPBUF;
+}
+inline void
+i2c_write (unsigned char c)
+{
+    SSPCON1bits.CKP = 0;
+    SSPBUF = c;
+    SSPCON1bits.CKP = 1;
+    (void)i2c_read();
+}
+/* See AN734b for 18F series I2C slave state descriptions
+ */
+inline unsigned char
+i2c_getstate (void)
+{
+    unsigned char state = 0;
 
     // State 1: I2C write operation, last byte was an address byte
     // SSPSTAT bits: S = 1, D_A = 0, R_W = 0, BF = 1
     if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 0
                            && SSPSTATbits.R_W == 0
                            && SSPSTATbits.BF == 1) {
-        count = 0;
-        dummy = SSPBUF; /* read address and discard */
-
+        state = 1;
+    }
     // State 2: I2C write operation, last byte was a data byte
     // SSPSTAT bits: S = 1, D_A = 1, R_W = 0, BF = 1
-    } else if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
+    if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
                                   && SSPSTATbits.R_W == 0
                                   && SSPSTATbits.BF == 1) {
-        if (count < sizeof(data)/sizeof(data[0]))
-            data[count++] = SSPBUF;
-
+        state = 2;
+    }
     // State 3: I2C read operation, last byte was an address byte
     // SSPSTAT bits: S = 1, D_A = 0, R_W = 1
-    } else if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 0
-                                  && SSPSTATbits.R_W == 1) {
-        count = 0;
-        SSPBUF = data[count++];
-        SSPCON1bits.CKP = 1;
+    if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 0
+                           && SSPSTATbits.R_W == 1) {
 
+        state = 3;
+    }
     // State 4: I2C read operation, last byte was a data byte
     // SSPSTAT bits: S = 1, D_A = 1, R_W = 1, BF = 0
-    } else if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
-                                  && SSPSTATbits.R_W == 1
-                                  && SSPSTATbits.BF == 0) {
-       
-        if (count < sizeof(data)/sizeof(data[0])) {
-            SSPBUF = data[count++];
-            SSPCON1bits.CKP = 1;
-        }
+    if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
+                           && SSPSTATbits.R_W == 1
+                           && SSPSTATbits.BF == 0) {
+
+        state = 4;
     
+    }
     // State 5: Slave I2C logic reset by NACK from master
     // SSPSTAT bits: S = 1, D_A = 1, BF = 0, CKP = 1
-    } else if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
-                                  && SSPSTATbits.BF == 0
-                                  && SSPCON1bits.CKP == 1) {
-        count = 0;
+    if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
+                           && SSPSTATbits.BF == 0
+                           && SSPCON1bits.CKP == 1) {
+        state = 5;
+    }
+    return state;
+}
+
+typedef enum {REG_BUTTONS=0} i2c_reg_t;
+inline void
+reg_set (unsigned char regnum, unsigned char val)
+{
+    switch (regnum) {
+        case REG_BUTTONS:
+            ibuttons = val;
+            break;
+    }
+}
+inline unsigned char
+reg_get (unsigned char regnum)
+{
+    unsigned char val = 0;
+
+    switch (regnum) {
+        case REG_BUTTONS:
+            val = buttons;
+            break;
+    }
+    return val;
+}
+
+/* Simple protocol based on 1-byte registers:
+ * To write a register, master writes 2 <regnum> <value>
+ * To read a register, master writes 1 <regnum>, then reads <value>.
+ * After a read or a write, another read re-samples the same <regnum>.
+ */
+typedef enum {I2C_CMD_READ=1, I2C_CMD_WRITE=2} i2c_cmd_t;
+inline void
+i2c_interrupt (void)
+{
+    static unsigned char count = 0;
+    static unsigned char cmd = I2C_CMD_READ;
+    static unsigned char regnum = 0;
+
+    switch (i2c_getstate ()) {
+        case 1: /* write addr */
+            (void)i2c_read();
+            count = 0;
+            break;
+        case 2: /* write 1..Nth byte */
+            if (count == 0) {
+               cmd = i2c_read ();
+            } else if (count == 1) {
+               regnum = i2c_read ();
+            } else if (count == 2 && cmd == I2C_CMD_WRITE) {
+               reg_set (regnum, i2c_read ());
+            } else {
+               (void)i2c_read();
+            }
+            count++;
+            break;
+        case 3: /* read 1st byte */
+        case 4: /* read 2..Nth byte */
+            i2c_write (reg_get (regnum));
+            break;
+        case 5:  /* NAK */
+            count = 0;
+            (void)i2c_read();
+            break;
+        default:
+            break;
+    }
+
+    if (SSPCON1bits.SSPOV) {
+        SSPCON1bits.SSPOV = 0;
+        (void)i2c_read();
     }
 }
 
@@ -215,7 +300,7 @@ adc_read (char chs)
             result > SCALED_4V ? ADC_ON : ADC_MID);
 }
 
-#define DEBOUNCE_THRESH 100
+#define DEBOUNCE_THRESH 10
 typedef enum { DB_SETTLING, DB_ON, DB_OFF} db_t;
 db_t
 port_read_debounce (int *dbcount, char val)
@@ -249,19 +334,16 @@ dc_set_dec (dec_t want)
             GONORTH = 0;
             NOP ();
             GOSOUTH = 0;
-            adj_dec = 0;
             break;
         case DEC_NORTH:
             GONORTH = 1;
             NOP ();
             GOSOUTH = 0;
-            adj_dec = 1;
             break;
         case DEC_SOUTH:
             GONORTH = 0;
             NOP ();
             GOSOUTH = 1;
-            adj_dec = 1;
             break;
     }
     cur = want;
@@ -281,19 +363,16 @@ dc_set_focus (focus_t want)
             FOCIN = 0;
             NOP ();
             FOCOUT = 0;
-            adj_focus = 0;
             break;
         case FOC_PLUS:
             FOCIN = 1;
             NOP ();
             FOCOUT = 0;
-            adj_focus = 1;
             break;
         case FOC_MINUS:
             FOCIN = 0;
             NOP ();
             FOCOUT = 1;
-            adj_focus = 1;
             break;
     }
     cur = want;
@@ -304,33 +383,61 @@ poll_buttons (void)
 {
     static int ncount = 0;
     static int ecount = 0;
-    db_t n, e;
-    adc_t s, w;
+    char b = 0;
 
-    n = port_read_debounce (&ncount, !SW_NORTH);      /* dec+ */
-    e = port_read_debounce (&ecount, !SW_EAST);       /* ra+ */
-    s = adc_read (ADC_SOUTH);                    /* focus+/dec- */
-    w = adc_read (ADC_WEST);                     /* focus-/ra- */
+    switch (port_read_debounce (&ncount, !SW_NORTH)) { /* dec+ */
+        case DB_ON:
+            b |= BUTTON_NORTH;
+            break;
+    }
+    switch (port_read_debounce (&ecount, !SW_EAST)) {       /* ra+ */
+        case DB_ON:
+            b |= BUTTON_EAST;
+            break;
+    }
+    switch (adc_read (ADC_SOUTH)) {                    /* focus+/dec- */
+        case ADC_MID:
+            b |= BUTTON_FOCIN;
+            break;
+        case ADC_OFF:
+            b |= BUTTON_SOUTH;
+            break;
+    }
+    switch (adc_read (ADC_WEST)) {                     /* focus-/ra- */
+        case ADC_MID:
+            b |= BUTTON_FOCOUT;
+            break;
+        case ADC_OFF:
+            b |= BUTTON_WEST;
+            break;
+    }
+    buttons = b;
+}
 
-    if (s == ADC_MID && w != ADC_MID)
+void
+action (void)
+{
+    unsigned char b = buttons | ibuttons;
+
+    if ((b & BUTTON_FOCIN))
         dc_set_focus (FOC_MINUS);
-    else if (s != ADC_MID && w == ADC_MID)
+    else if (b & BUTTON_FOCOUT)
         dc_set_focus (FOC_PLUS);
-    else if (s != ADC_MID && w != ADC_MID)
+    else
         dc_set_focus (FOC_OFF);
 
-    if (n == DB_ON && s == ADC_ON)
+    if (b & BUTTON_NORTH)
         dc_set_dec (DEC_NORTH);
-    else if (n == DB_OFF && s == ADC_OFF)
+    else if (b & BUTTON_SOUTH)
         dc_set_dec (DEC_SOUTH);
-    else if (n == DB_OFF && s != ADC_OFF)
+    else
         dc_set_dec (DEC_OFF);
 
-    if (e == DB_ON && w == ADC_ON)
+    if (b & BUTTON_EAST)
         ac_set_freq (FREQ_EAST);
-    else if (e == DB_OFF && w == ADC_OFF)
+    else if (b & BUTTON_WEST)
         ac_set_freq (FREQ_WEST);
-    else if (e == DB_OFF && w != ADC_OFF)
+    else
         ac_set_freq (FREQ_SIDEREAL);
 }
 
@@ -351,12 +458,12 @@ indicate(void)
 {
     if (output_inhibit) {
         static int counter = 0;
-        if (++counter == 5000) {
+        if (++counter == 500) {
             port_led_toggle ();
             counter = 0;
         }
     } else { 
-        if (adj_dec || adj_focus || adj_ra)
+        if (buttons | ibuttons)
             port_led_set (LED_ON);
         else
             port_led_set (LED_OFF); 
@@ -382,9 +489,19 @@ main(void)
      */
     TRISBbits.RB4 = 1;          /* SDA */
     TRISBbits.RB6 = 1;          /* SCL */
-    SSPCON1bits.SSPEN = 1;      /* enable MSSP peripheral */
+    SSPSTAT = 0;
+    SSPCON1 = 0;
     SSPCON1bits.SSPM = 6;       /* I2C slave mode, 7-bit address */
-    SSPADD = I2C_ADDR << 1;     /* set address */
+    SSPCON1bits.CKP = 1;        /* release clock */
+    SSPCON2 = 0;
+    SSPCON2bits.GCEN = 1;       /* disable general call */
+    SSPCON2bits.SEN = 0;        /* disable clock stretching */
+    SSPADD = I2C_ADDR << 1;     /* set I2C slave address */
+    SSPCON1bits.SSPEN = 1;      /* enable MSSP peripheral */
+    (void)i2c_read();
+    SSPCON1bits.SSPOV = 0;      /* clear buffer overflow */
+    SSPCON2bits.RCEN = 1;       /* receive enable */
+    SSPIF = 0;                  /* clear SSP interrupt flag */
     SSPIE = 1;                  /* enable SSP interrupt */
 
     /* Digital input config
@@ -433,7 +550,9 @@ main(void)
     TMR0ON = 1;                 /* start timer0 */
     for (;;) {
         poll_buttons ();
+        action ();
         indicate ();
+        Delay10KTCYx(1);
     }
 }
 
