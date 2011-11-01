@@ -62,7 +62,7 @@ __CONFIG (4, LVP_OFF);
 #define FREQ_WEST       9
 
 static char buttons = 0;  /* bitmask of depressed handbox buttons */
-static char ibuttons = 0; /* i2c simulated buttons of above */
+static char ibuttons = 0; /* i2c version of above */
 #define BUTTON_NORTH    0x01
 #define BUTTON_SOUTH    0x02
 #define BUTTON_EAST     0x04
@@ -321,6 +321,18 @@ port_read_debounce (int *dbcount, char val)
     return res;
 }
 
+typedef enum { LED_OFF, LED_ON } led_t;
+void
+port_led_set (led_t val)
+{
+    LED = (val == LED_OFF ? 1 : 0);
+}
+void
+port_led_toggle (void)
+{
+    LED = !LED;
+}
+
 typedef enum { DEC_OFF, DEC_NORTH, DEC_SOUTH } dec_t;
 void
 dc_set_dec (dec_t want)
@@ -349,7 +361,7 @@ dc_set_dec (dec_t want)
     cur = want;
 }
 
-typedef enum { FOC_OFF, FOC_PLUS, FOC_MINUS} focus_t;
+typedef enum { FOC_OFF, FOC_IN, FOC_OUT} focus_t;
 
 void
 dc_set_focus (focus_t want)
@@ -364,12 +376,12 @@ dc_set_focus (focus_t want)
             NOP ();
             FOCOUT = 0;
             break;
-        case FOC_PLUS:
+        case FOC_IN:
             FOCIN = 1;
             NOP ();
             FOCOUT = 0;
             break;
-        case FOC_MINUS:
+        case FOC_OUT:
             FOCIN = 0;
             NOP ();
             FOCOUT = 1;
@@ -385,17 +397,17 @@ poll_buttons (void)
     static int ecount = 0;
     char b = 0;
 
-    switch (port_read_debounce (&ncount, !SW_NORTH)) { /* dec+ */
+    switch (port_read_debounce (&ncount, !SW_NORTH)) {
         case DB_ON:
             b |= BUTTON_NORTH;
             break;
     }
-    switch (port_read_debounce (&ecount, !SW_EAST)) {       /* ra+ */
+    switch (port_read_debounce (&ecount, !SW_EAST)) {
         case DB_ON:
             b |= BUTTON_EAST;
             break;
     }
-    switch (adc_read (ADC_SOUTH)) {                    /* focus+/dec- */
+    switch (adc_read (ADC_SOUTH)) {
         case ADC_MID:
             b |= BUTTON_FOCIN;
             break;
@@ -403,7 +415,7 @@ poll_buttons (void)
             b |= BUTTON_SOUTH;
             break;
     }
-    switch (adc_read (ADC_WEST)) {                     /* focus-/ra- */
+    switch (adc_read (ADC_WEST)) {
         case ADC_MID:
             b |= BUTTON_FOCOUT;
             break;
@@ -420,9 +432,9 @@ action (void)
     unsigned char b = buttons | ibuttons;
 
     if ((b & BUTTON_FOCIN))
-        dc_set_focus (FOC_MINUS);
+        dc_set_focus (FOC_IN);
     else if (b & BUTTON_FOCOUT)
-        dc_set_focus (FOC_PLUS);
+        dc_set_focus (FOC_OUT);
     else
         dc_set_focus (FOC_OFF);
 
@@ -439,18 +451,6 @@ action (void)
         ac_set_freq (FREQ_WEST);
     else
         ac_set_freq (FREQ_SIDEREAL);
-}
-
-typedef enum { LED_OFF, LED_ON } led_t;
-void
-port_led_set (led_t val)
-{
-    LED = (val == LED_OFF ? 1 : 0);
-}
-void
-port_led_toggle (void)
-{
-    LED = !LED;
 }
 
 void
