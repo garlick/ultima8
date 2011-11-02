@@ -42,8 +42,8 @@ __CONFIG (4, LVP_OFF);
 
 #define ADC_SOUTH       3
 #define ADC_WEST        2
+#define ADC_EAST        8
 #define SW_NORTH        PORTAbits.RA5
-#define SW_EAST         PORTAbits.RA3
 
 #define SQWAVE          PORTBbits.RB7
 #define FOCOUT          PORTBbits.RB5
@@ -69,6 +69,7 @@ static char ibuttons = 0; /* i2c version of above */
 #define BUTTON_WEST     0x08
 #define BUTTON_FOCIN    0x10
 #define BUTTON_FOCOUT   0x20
+#define BUTTON_LAMP     0x40
 
 static char output_inhibit = 1;
 
@@ -402,8 +403,11 @@ poll_buttons (void)
             b |= BUTTON_NORTH;
             break;
     }
-    switch (port_read_debounce (&ecount, !SW_EAST)) {
-        case DB_ON:
+    switch (adc_read (ADC_EAST)) {
+        case ADC_MID:
+            b |= BUTTON_LAMP;
+            break;
+        case ADC_OFF:
             b |= BUTTON_EAST;
             break;
     }
@@ -506,9 +510,7 @@ main(void)
 
     /* Digital input config
      */
-    //TRISAbits.RA3 = 1;        /* RA3 is input (the only option) */
     RABPU = 0;                  /* enable weak pullups feature */
-    WPUAbits.WPUA3 = 1;         /* pullup on RA3 */
     TRISAbits.RA5 = 1;          /* RA5 is input */
     WPUAbits.WPUA5 = 1;         /* pullup on RA5 */
 
@@ -516,8 +518,10 @@ main(void)
      */
     TRISAbits.RA2 = 1;          /* AN3 */
     TRISAbits.RA4 = 1;          /* AN2 */ 
-    ANSELbits.ANS2 = 1;         /* RA2(AN2) and RA4(AN3) will be analog */
-    ANSELbits.ANS3 = 1;
+    TRISCbits.RC6 = 1;          /* AN8 */
+    ANSELbits.ANS2 = 1;         /* RA2(AN2) will be analog */
+    ANSELbits.ANS3 = 1;         /* RA4(AN3) will be analog */
+    ANSELHbits.ANS8 = 1;        /* RC6(AN8) will be analog */
     ADCON2bits.ADCS = 6;        /* conv clock = Fosc/64 */
     ADCON1bits.PVCFG = 0;       /* ref to Vdd */
     ADCON1bits.NVCFG = 0;       /* ref to Vss */
