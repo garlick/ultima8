@@ -25,9 +25,10 @@
 /* NOTE: compiled with hi-tech C pro V9.80 */
 
 #include <htc.h>
-#include <delays.h>
 
 #include "freq.h"
+
+#define _XTAL_FREQ 64000000
 
 #if defined(_18F14K22)
 __CONFIG (1, FOSC_IRC & PLLEN_ON);  /* system clock is HFOSC*4 */
@@ -61,8 +62,8 @@ __CONFIG (4, LVP_OFF);
 #define FREQ_SIDEREAL   5
 #define FREQ_WEST       9
 
-static char buttons = 0;  /* bitmask of depressed handbox buttons */
-static char ibuttons = 0; /* i2c version of above */
+static volatile char buttons = 0;  /* bitmask of depressed handbox buttons */
+static volatile char ibuttons = 0; /* i2c version of above */
 #define BUTTON_NORTH    0x01
 #define BUTTON_SOUTH    0x02
 #define BUTTON_EAST     0x04
@@ -71,10 +72,10 @@ static char ibuttons = 0; /* i2c version of above */
 #define BUTTON_FOCOUT   0x20
 #define BUTTON_LAMP     0x40
 
-static char output_inhibit = 1;
+static volatile char output_inhibit = 1;
 
-static char ac_freq_now = FREQ_EAST;
-static char ac_freq_targ = FREQ_SIDEREAL;
+static volatile char ac_freq_now = FREQ_EAST;
+static volatile char ac_freq_targ = FREQ_SIDEREAL;
 
 void
 ac_set_freq (char freq)
@@ -556,7 +557,7 @@ main(void)
         poll_buttons ();
         action ();
         indicate ();
-        Delay10KTCYx(1);
+        __delay_ms(1);
     }
 }
 
