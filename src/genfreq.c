@@ -8,7 +8,7 @@
 #define ALCOR_LUNAR_50 48.912
 #define ALCOR_LUNAR_60 58.696
 
-#define CLOCK_FREQ 64000000
+#define _XTAL_FREQ 64000000
 #define PRESCALER_RATIO 8
 
 double
@@ -39,7 +39,7 @@ main (int argc, char *argv[])
 	 };
 	int val[12] = { 0,0,0,0,0,0,0,0,0,0,0 };
 	double prescaler = PRESCALER_RATIO;
-	double countfreq = (double)CLOCK_FREQ/(4*prescaler);
+	double countfreq = (double)_XTAL_FREQ/(4*prescaler);
 
 	for (i = 0; i < 256*256; i++) {
 		for (j = 0; j < 12; j++) {
@@ -61,8 +61,7 @@ main (int argc, char *argv[])
 			j == 11 ? "50hz sidereal" : "");
 	printf ("*/\n\n");
 
-	printf ("/* generated with genfreq - DO NOT EDIT */\n",
-		prescaler, CLOCK_FREQ);
+	printf ("/* generated with genfreq - DO NOT EDIT */\n");
 #if (MOTOR_HZ == 60)
 	printf ("int freq[] = {");
 	for (j = 0; j < 10; j++)
