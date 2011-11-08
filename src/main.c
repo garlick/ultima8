@@ -57,11 +57,6 @@ __CONFIG (4, LVP_OFF);
 #define GONORTH         PORTCbits.RC1
 #define GOSOUTH         PORTCbits.RC0
 
-#define FREQ_EAST       0 /* special:  turn off motor, but leave timer on */
-#define FREQ_LUNAR      4
-#define FREQ_SIDEREAL   5
-#define FREQ_WEST       9
-
 static volatile char buttons = 0;  /* bitmask of depressed handbox buttons */
 static volatile char ibuttons = 0; /* i2c version of above */
 #define BUTTON_NORTH    0x01
