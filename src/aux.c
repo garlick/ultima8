@@ -56,9 +56,9 @@ static char ibuttons = 0; /* i2c "buttons" */
 #define BUTTON_FOCIN    0x10
 #define BUTTON_FOCOUT   0x20
 
-static unsigned int enc_ra = 0;
-static unsigned int enc_dec = 0;
-static unsigned int enc_focus = 0;
+static UINT16 enc_ra = 0;
+static UINT16 enc_dec = 0;
+static UINT16 enc_focus = 0;
 
 inline unsigned char
 i2c_read (void)
@@ -144,19 +144,19 @@ reg_set (unsigned char regnum, unsigned char val, i2c_bytesel_t sel)
             if (sel == REG_LSB)
                 enc_ra = val;
             else
-                enc_ra |= (unsigned int)val << 8;
+                enc_ra |= (UINT16)val << 8;
             break;
         case REG_DEC_ENC:
             if (sel == REG_LSB)
                 enc_dec = val;
             else
-                enc_dec |= (unsigned int)val << 8;
+                enc_dec |= (UINT16)val << 8;
             break;
         case REG_FOCUS_ENC:
             if (sel == REG_LSB)
                 enc_focus = val;
             else
-                enc_focus |= (unsigned int)val << 8;
+                enc_focus |= (UINT16)val << 8;
             break;
     }
 }
