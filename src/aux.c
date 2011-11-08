@@ -40,9 +40,18 @@ __CONFIG (4, LVP_OFF);
 
 #define I2C_ADDR        0x0a
 
-#define FOCOUT          PORTBbits.RB5
-#define PWM             PORTCbits.RC5
+#define FOCOUT          PORTCbits.RC1
 #define FOCIN           PORTCbits.RC2
+#define PWM             PORTCbits.RC5
+
+#define DEC_A           PORTAbits.RA5
+#define DEC_B           PORTAbits.RA4
+
+#define RA_A            PORTAbits.RA3
+#define RA_B            PORTBbits.RB7
+
+#define FOC_A           PORTBbits.RB5
+#define FOC_B           PORTAbits.RA2
 
 static char ibuttons = 0; /* i2c "buttons" */
 #define BUTTON_FOCIN    0x10
@@ -309,12 +318,6 @@ main(void)
     IOCA = 0;                   /* disable all interrupt on change bits */
     IOCB = 0; 
 
-    /* Configure encoder inputs.
-     */
-    /* 6 inputs */
-    /* enable IOC */
-    /* clear IOC interrupt flag */
-    /* enable IOC interrupt */
 
     /* I2C config
      */
@@ -340,6 +343,19 @@ main(void)
     RABPU = 0;                  /* enable weak pullups feature */
     TRISAbits.RA5 = 1;          /* RA5 is input */
     WPUAbits.WPUA5 = 1;         /* pullup on RA5 */
+    TRISAbits.RA4 = 1;          /* RA4 is input */
+    WPUAbits.WPUA4 = 1;         /* pullup on RA4 */
+    TRISAbits.RA3 = 1;          /* RA3 is input */
+    WPUAbits.WPUA3 = 1;         /* pullup on RA3 */
+    TRISBbits.RB7 = 1;          /* RB7 is input */
+    WPUBbits.WPUB7 = 1;         /* pullup on RB7 */
+    TRISBbits.RB5 = 1;          /* RB5 is input */
+    WPUBbits.WPUB5 = 1;         /* pullup on RB5 */
+    TRISAbits.RA2 = 1;          /* RA2 is input */
+    WPUAbits.WPUA2 = 1;         /* pullup on RA2 */
+    /* enable IOC */
+    /* clear IOC interrupt flag */
+    /* enable IOC interrupt */
 
     /* DC motor config
      */
