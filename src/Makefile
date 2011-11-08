@@ -3,10 +3,10 @@ CFLAGS=-DMOTOR_HZ=60
 
 all: main.hex aux.hex
 
-main.hex: main.c freq.h
-	picc18 -O$@ --chip=$(CHIP) main.c $(CFLAGS)
-aux.hex: aux.c
-	picc18 -O$@ --chip=$(CHIP) aux.c $(CFLAGS)
+main.hex: main.c freq.h i2c_slave.c
+	picc18 -O$@ --chip=$(CHIP) main.c i2c_slave.c $(CFLAGS)
+aux.hex: aux.c i2c_slave.c
+	picc18 -O$@ --chip=$(CHIP) aux.c i2c_slave.c $(CFLAGS)
 
 freq.h: genfreq
 	./genfreq >$@

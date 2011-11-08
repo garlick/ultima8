@@ -25,6 +25,7 @@
 /* NOTE: compiled with hi-tech C pro V9.80 */
 
 #include <htc.h>
+#include "i2c_slave.h"
 
 #define _XTAL_FREQ 64000000
 
@@ -60,66 +61,6 @@ static UINT16 enc_ra = 0;
 static UINT16 enc_dec = 0;
 static UINT16 enc_focus = 0;
 
-inline unsigned char
-i2c_read (void)
-{
-    return SSPBUF;
-}
-inline void
-i2c_write (unsigned char c)
-{
-    SSPCON1bits.CKP = 0;
-    SSPBUF = c;
-    SSPCON1bits.CKP = 1;
-    (void)i2c_read();
-}
-/* See AN734b for 18F series I2C slave state descriptions
- */
-inline unsigned char
-i2c_getstate (void)
-{
-    unsigned char state = 0;
-
-    // State 1: I2C write operation, last byte was an address byte
-    // SSPSTAT bits: S = 1, D_A = 0, R_W = 0, BF = 1
-    if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 0
-                           && SSPSTATbits.R_W == 0
-                           && SSPSTATbits.BF == 1) {
-        state = 1;
-    }
-    // State 2: I2C write operation, last byte was a data byte
-    // SSPSTAT bits: S = 1, D_A = 1, R_W = 0, BF = 1
-    if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
-                                  && SSPSTATbits.R_W == 0
-                                  && SSPSTATbits.BF == 1) {
-        state = 2;
-    }
-    // State 3: I2C read operation, last byte was an address byte
-    // SSPSTAT bits: S = 1, D_A = 0, R_W = 1
-    if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 0
-                           && SSPSTATbits.R_W == 1) {
-
-        state = 3;
-    }
-    // State 4: I2C read operation, last byte was a data byte
-    // SSPSTAT bits: S = 1, D_A = 1, R_W = 1, BF = 0
-    if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
-                           && SSPSTATbits.R_W == 1
-                           && SSPSTATbits.BF == 0) {
-
-        state = 4;
-    
-    }
-    // State 5: Slave I2C logic reset by NACK from master
-    // SSPSTAT bits: S = 1, D_A = 1, BF = 0, CKP = 1
-    if (SSPSTATbits.S == 1 && SSPSTATbits.D_A == 1
-                           && SSPSTATbits.BF == 0
-                           && SSPCON1bits.CKP == 1) {
-        state = 5;
-    }
-    return state;
-}
-
 typedef enum {
     REG_BUTTONS=0,
     REG_RA_ENC=1,
@@ -127,13 +68,8 @@ typedef enum {
     REG_FOCUS_ENC=2,
 } i2c_reg_t;
 
-typedef enum {
-    REG_LSB = 0,
-    REG_MSB = 1,
-} i2c_bytesel_t;
-
-inline void
-reg_set (unsigned char regnum, unsigned char val, i2c_bytesel_t sel)
+void
+reg_set (unsigned char regnum, unsigned char val, regbyte_t sel)
 {
     switch (regnum) {
         case REG_BUTTONS:
@@ -161,8 +97,8 @@ reg_set (unsigned char regnum, unsigned char val, i2c_bytesel_t sel)
     }
 }
 
-inline unsigned char
-reg_get (unsigned char regnum, i2c_bytesel_t sel)
+unsigned char
+reg_get (unsigned char regnum, regbyte_t sel)
 {
     unsigned char val = 0;
 
@@ -191,64 +127,6 @@ reg_get (unsigned char regnum, i2c_bytesel_t sel)
             break;
     }
     return val;
-}
-
-/* Simple protocol based on 1- and 2-byte registers:
- * To write a register, master writes 2 <regnum> <lsb> [<msb>]
- * To read a register, master writes 1 <regnum>, then reads <lsb> [<msb>].
- * After a read or a write, another read re-samples the same <regnum>.
- */
-typedef enum {I2C_CMD_READ=1, I2C_CMD_WRITE=2} i2c_cmd_t;
-inline void
-i2c_interrupt (void)
-{
-    static unsigned char count = 0;
-    static unsigned char cmd = I2C_CMD_READ;
-    static unsigned char regnum = 0;
-
-    switch (i2c_getstate ()) {
-        case 1: /* write addr */
-            (void)i2c_read();
-            count = 0;
-            break;
-        case 2: /* write 1..Nth byte */
-            if (count == 0) {
-               cmd = i2c_read ();
-            } else if (count == 1) {
-               regnum = i2c_read ();
-            } else if (count == 2 && cmd == I2C_CMD_WRITE) {
-               reg_set (regnum, i2c_read (), REG_LSB);
-            } else if (count == 3 && cmd == I2C_CMD_WRITE) {
-               reg_set (regnum, i2c_read (), REG_MSB);
-            } else {
-               (void)i2c_read();
-            }
-            count++;
-            break;
-        case 3: /* read 1st byte */
-            count = 0;
-            i2c_write (reg_get (regnum, REG_LSB));
-            count++;
-            break;
-        case 4: /* read 2..Nth byte */
-            if (count == 1)
-                i2c_write (reg_get (regnum, REG_MSB));
-            else
-                i2c_write (0);
-            count++;
-            break;
-        case 5:  /* NAK */
-            count = 0;
-            (void)i2c_read();
-            break;
-        default:
-            break;
-    }
-
-    if (SSPCON1bits.SSPOV) {
-        SSPCON1bits.SSPOV = 0;
-        (void)i2c_read();
-    }
 }
 
 void interrupt
@@ -320,22 +198,7 @@ main(void)
 
     /* I2C config
      */
-    TRISBbits.RB4 = 1;          /* SDA */
-    TRISBbits.RB6 = 1;          /* SCL */
-    SSPSTAT = 0;
-    SSPCON1 = 0;
-    SSPCON1bits.SSPM = 6;       /* I2C slave mode, 7-bit address */
-    SSPCON1bits.CKP = 1;        /* release clock */
-    SSPCON2 = 0;
-    SSPCON2bits.GCEN = 1;       /* disable general call */
-    SSPCON2bits.SEN = 0;        /* disable clock stretching */
-    SSPADD = I2C_ADDR << 1;     /* set I2C slave address */
-    SSPCON1bits.SSPEN = 1;      /* enable MSSP peripheral */
-    (void)i2c_read();
-    SSPCON1bits.SSPOV = 0;      /* clear buffer overflow */
-    SSPCON2bits.RCEN = 1;       /* receive enable */
-    SSPIF = 0;                  /* clear SSP interrupt flag */
-    SSPIE = 1;                  /* enable SSP interrupt */
+    i2c_init (I2C_ADDR);
 
     /* Digital input config
      */
