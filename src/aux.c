@@ -25,9 +25,8 @@
 /* NOTE: compiled with hi-tech C pro V9.80 */
 
 #include <htc.h>
-#include <delays.h>
 
-#include "freq.h"
+#define _XTAL_FREQ 64000000
 
 #if defined(_18F14K22)
 __CONFIG (1, FOSC_IRC & PLLEN_ON);  /* system clock is HFOSC*4 */
@@ -57,9 +56,9 @@ static char ibuttons = 0; /* i2c "buttons" */
 #define BUTTON_FOCIN    0x10
 #define BUTTON_FOCOUT   0x20
 
-static uint16_t enc_ra = 0;
-static uint16_t enc_dec = 0;
-static uint16_t enc_focus = 0;
+static unsigned int enc_ra = 0;
+static unsigned int enc_dec = 0;
+static unsigned int enc_focus = 0;
 
 inline unsigned char
 i2c_read (void)
@@ -145,19 +144,19 @@ reg_set (unsigned char regnum, unsigned char val, i2c_bytesel_t sel)
             if (sel == REG_LSB)
                 enc_ra = val;
             else
-                enc_ra |= (uint16_t)val << 8;
+                enc_ra |= (unsigned int)val << 8;
             break;
         case REG_DEC_ENC:
             if (sel == REG_LSB)
                 enc_dec = val;
             else
-                enc_dec |= (uint16_t)val << 8;
+                enc_dec |= (unsigned int)val << 8;
             break;
         case REG_FOCUS_ENC:
             if (sel == REG_LSB)
                 enc_focus = val;
             else
-                enc_focus |= (uint16_t)val << 8;
+                enc_focus |= (unsigned int)val << 8;
             break;
     }
 }
@@ -345,7 +344,7 @@ main(void)
     WPUAbits.WPUA5 = 1;         /* pullup on RA5 */
     TRISAbits.RA4 = 1;          /* RA4 is input */
     WPUAbits.WPUA4 = 1;         /* pullup on RA4 */
-    TRISAbits.RA3 = 1;          /* RA3 is input */
+    //TRISAbits.RA3 = 1;        /* RA3 is input (cannot be anything else) */
     WPUAbits.WPUA3 = 1;         /* pullup on RA3 */
     TRISBbits.RB7 = 1;          /* RB7 is input */
     WPUBbits.WPUB7 = 1;         /* pullup on RB7 */
@@ -367,7 +366,7 @@ main(void)
     GIE = 1;                    /* enable global interrupts */
     for (;;) {
         action ();
-        Delay10KTCYx(1);
+        __delay_ms(1);
     }
 }
 
