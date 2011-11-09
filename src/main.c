@@ -71,6 +71,7 @@ static volatile char output_inhibit = 1;
 
 static volatile char ac_freq_now = FREQ_EAST;
 static volatile char ac_freq_targ = FREQ_SIDEREAL;
+static volatile UINT16 ac_count_special = 0; /* disabled */
 
 void
 ac_set_freq (char freq)
@@ -129,16 +130,26 @@ ac_interrupt (void)
                 ac_freq_now--;
             break;
     }
-    TMR0 = freq[ac_freq_now] + FUDGE_COUNT;
+    if (ac_count_special)
+        TMR0 = ac_count_special;
+    else
+        TMR0 = freq[ac_freq_now] + FUDGE_COUNT;
 }
 
-typedef enum {REG_BUTTONS=0} i2c_reg_t;
+typedef enum {REG_BUTTONS=0, REG_AC_COUNT=1} i2c_reg_t;
 void
 reg_set (unsigned char regnum, unsigned char val, regbyte_t sel)
 {
     switch (regnum) {
         case REG_BUTTONS:
-            ibuttons = val;
+            if (sel == REG_LSB)
+                ibuttons = val;
+            break;
+        case REG_AC_COUNT:
+            if (sel == REG_LSB)
+                ac_count_special = val;
+            else
+                ac_count_special |= (UINT16)val<<8;
             break;
     }
 }
@@ -146,10 +157,19 @@ unsigned char
 reg_get (unsigned char regnum, regbyte_t sel)
 {
     unsigned char val = 0;
+    UINT16 count;
 
     switch (regnum) {
         case REG_BUTTONS:
-            val = buttons;
+            if (sel == REG_LSB)
+                val = buttons;
+            break;
+        case REG_AC_COUNT:
+            count = ac_count_special ? ac_count_special : freq[ac_freq_now];
+            if (sel == REG_LSB)
+                val = count & 0xff;
+            else
+                val = (count >> 8) & 0xff;
             break;
     }
     return val;
