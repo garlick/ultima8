@@ -86,7 +86,7 @@ ac_get_freq (void)
 
 #define FUDGE_COUNT 500 /* FIXME shouldn't need this */
 
-inline void
+void
 ac_interrupt (void)
 {
     static char state = 0;
