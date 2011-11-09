@@ -132,6 +132,38 @@ reg_get (unsigned char regnum, regbyte_t sel)
 void interrupt
 isr (void)
 {
+    if (RABIE && RABIF) {
+        static unsigned char odec = 0;
+        static unsigned char ora = 0;
+        static unsigned char ofoc = 0;
+        unsigned char ndec = DEC_A | (DEC_B << 1);
+        unsigned char nra =   RA_A | (RA_B << 1);
+        unsigned char nfoc = FOC_A | (FOC_B << 1);
+
+        if (ndec != odec) {
+            if (((odec >> 1) ^ ndec) & 1 == 1)
+                enc_dec++;
+            else
+                enc_dec--;
+            odec = ndec;
+        }
+        if (nra != ora) {
+            if (((ora >> 1) ^ nra) & 1 == 1)
+                enc_ra++;
+            else
+                enc_ra--;
+            ora = nra;
+        }
+        if (nfoc != ofoc) {
+            if (((ofoc >> 1) ^ nfoc) & 1 == 1)
+                enc_focus++;
+            else
+                enc_focus--;
+            ofoc = nfoc;
+        }
+        
+        RABIF = 0;
+    } 
     if (SSPIE && SSPIF) {
         i2c_interrupt ();
         SSPIF = 0;
@@ -203,18 +235,26 @@ main(void)
     /* Digital input config
      */
     RABPU = 0;                  /* enable weak pullups feature */
-    TRISAbits.RA5 = 1;          /* RA5 is input */
-    WPUAbits.WPUA5 = 1;         /* pullup on RA5 */
-    TRISAbits.RA4 = 1;          /* RA4 is input */
-    WPUAbits.WPUA4 = 1;         /* pullup on RA4 */
-    //TRISAbits.RA3 = 1;        /* RA3 is input (cannot be anything else) */
-    WPUAbits.WPUA3 = 1;         /* pullup on RA3 */
-    TRISBbits.RB7 = 1;          /* RB7 is input */
-    WPUBbits.WPUB7 = 1;         /* pullup on RB7 */
-    TRISBbits.RB5 = 1;          /* RB5 is input */
-    WPUBbits.WPUB5 = 1;         /* pullup on RB5 */
-    TRISAbits.RA2 = 1;          /* RA2 is input */
-    WPUAbits.WPUA2 = 1;         /* pullup on RA2 */
+    TRISAbits.RA5 = 1;          /* RA5 input */
+    WPUAbits.WPUA5 = 1;         /* RA5 pullup */
+    IOCAbits.IOCA5 = 1;         /* RA5 IOC */
+    TRISAbits.RA4 = 1;          /* RA4 input */
+    WPUAbits.WPUA4 = 1;         /* RA4 pullup */
+    IOCAbits.IOCA4 = 1;         /* RA4 IOC */
+    //TRISAbits.RA3 = 1;        /* RA3 input (no output capability) */
+    WPUAbits.WPUA3 = 1;         /* RA3 pullup */
+    IOCAbits.IOCA3 = 1;         /* RA3 IOC */
+    TRISBbits.RB7 = 1;          /* RB7 input */
+    WPUBbits.WPUB7 = 1;         /* RB7 pullup */
+    IOCBbits.IOCB7 = 1;         /* RB7 IOC */
+    TRISBbits.RB5 = 1;          /* RB5 input */
+    WPUBbits.WPUB5 = 1;         /* RB5 pullup */
+    IOCBbits.IOCB5 = 1;         /* RB5 IOC */
+    TRISAbits.RA2 = 1;          /* RA2 input */
+    WPUAbits.WPUA2 = 1;         /* RA2 pullup */
+    IOCAbits.IOCA2 = 1;         /* RA2 IOC */
+    RABIF = 0;                  /* clear IOC flag */
+    RABIE = 1;                  /* enable IOC */
     /* enable IOC */
     /* clear IOC interrupt flag */
     /* enable IOC interrupt */
