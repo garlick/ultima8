@@ -91,17 +91,14 @@ ac_interrupt (void)
 {
     static char state = 0;
     static int startup_delay = 0;
-    char inhibit = 0;
 
     if (startup_delay < 1000)
         startup_delay++;
     else
         output_inhibit = 0;
-    if (output_inhibit || ac_freq_now == FREQ_EAST)
-        inhibit = 1;
     switch (state) {
         case 0:
-            if (!inhibit) {
+            if (!output_inhibit) {
                 SQWAVE = 1;
                 NOP ();
                 PHASE1 = 1;
@@ -109,12 +106,12 @@ ac_interrupt (void)
             state = 1;
             break;
         case 1:
-            if (!inhibit)
+            if (!output_inhibit)
                 PHASE1 = 0;
             state = 2;
             break;
         case 2:
-            if (!inhibit) {
+            if (!output_inhibit) {
                 SQWAVE = 0;
                 NOP ();
                 PHASE2 = 1;
@@ -122,7 +119,7 @@ ac_interrupt (void)
             state = 3;
             break;
         case 3:
-            if (!inhibit)
+            if (!output_inhibit)
                 PHASE2 = 0;
             state = 0;
             /* Cycle completed - change timer count? */

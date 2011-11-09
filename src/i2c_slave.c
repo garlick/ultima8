@@ -20,7 +20,7 @@
  *  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
 \*****************************************************************************/
 
-/* i2c_slave.c - code to drive i2c slave */
+/* i2c_slave.c - code for i2c slave */
 
 /* Simple protocol based on 1-byte and 2-byte registers:
  * To write a register, master writes 2 <regnum> <lsb> [<msb>]
