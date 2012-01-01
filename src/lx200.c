@@ -20,15 +20,16 @@
  *  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
 \*****************************************************************************/
 
-/* lx200.c - accept lx200 commands on port 4030 for SkySafari iPhone app */
+/* lx200.c - accept lx200 commands for SkySafari and SkyMap iPhone apps */
 
-/* This is just a prototype to see if we can interface with SkySafari
-   on the iPhone.  We get lots of command sent but eventually it gets
-   unhappy with us.
-
-   Starmap Pro is happy but uses way fewer commands.  We want both to
-   work with our push-to.
-*/
+/* This is just a test program to get the LX200 protocol subset worked out.
+ *
+ * N.B. SkySafari likes to drop the connection between commands.
+ * N.B. SkyMap locks up or crashes on network errors
+ *
+ * FIXME: properly handle commands that are not aligned on recv () message
+ * boundaries.
+ */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,19 +41,18 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include <sys/wait.h>
-#include <signal.h>
 
 #define PORT "4030"
-#define BACKLOG 10
+#define BACKLOG 5
 
 int send_str (int fd, char *s)
 {
-    int r = send (fd, s, strlen(s), 0);
+    int r;
 
+    fprintf (stderr, "S: %s\n", s);
+    r = send (fd, s, strlen(s), 0);
     if (r == -1)
-        perror ("send");
-
+        perror ("S:");
     return r;
 }
 
@@ -60,75 +60,124 @@ void talk (int fd)
 {
     ssize_t n;
     char buf[256];
-    int lat_deg, lat_min;
-    int long_deg, long_min;
-    int utc_offset, l_hh, l_mm, l_ss;
-    int d_mm, d_dd, d_yy;
+    static int flag = 0;
+    int a, b, c;
+    float A, B, C;
+
+    if (flag) {
+        if (send_str (fd, "#") == -1)
+            return;
+        flag = 0;
+    }
 
     do {
         if ((n = recv (fd, buf, sizeof (buf) - 1, 0)) == -1) {
-            perror ("recv");
+            perror ("R: ");
             break;
         }
         if (n == 0) {
-            printf ("received EOF, disconnecting\n");
+            //fprintf (stderr, "R: EOF\n");
             break;
-        } else if (n == 1 && buf[0] == 0x6) { /* special single char cmd */
-            printf ("received ACK cmd\n",buf);
+        }
+        /* special single char cmd */
+        if (n == 1 && buf[0] == 0x6) {
+            fprintf (stderr, "R: ACK\n",buf);
             if (send_str (fd, "P") == -1)
                 break;
             continue;
         }
         buf[n] = '\0';
-        printf ("'%s'\n",buf);
-        fflush (stdout);
-
-        if (sscanf (buf, ":St%d*%d#", &lat_deg, &lat_min) == 2) {
-            printf ("Latitude: %d;%d'\n", lat_deg, lat_min);
+        fprintf (stderr, "R: %s\n",buf);
+        /* set current site latitude (sDD*MM) (resp: 0=invalid, 1=valid) */
+        if (sscanf (buf, ":St%d*%d#", &a, &b) == 2) {
             if (send_str (fd, "0") == -1)
                 break;
-        } else if (sscanf (buf, ":Sg%d*%d#", &long_deg, &long_min) == 2) {
-            printf ("Longitude: %d;%d'\n", long_deg, long_min);
+        /* set current site longitude (DDD*MM) (resp: 0=invalid, 1=valid) */
+        } else if (sscanf (buf, ":Sg%d*%d#", &a, &b) == 2) {
             if (send_str (fd, "0") == -1)
                 break;
-        } else if (sscanf (buf, ":SG%d#", &utc_offset) == 1) {
-            printf ("UTC offset: %d\n", utc_offset);
+        /* set UTC offset (sHH.H) (resp: 0=invalid, 1=valid) */
+        } else if (sscanf (buf, ":SG%f#", &A) == 1) {
             if (send_str (fd, "0") == -1)
                 break;
-        /* ':SL15:25:08#' */
-        } else if (sscanf (buf, ":SL%d:%d:%d#", &l_hh, &l_mm, &l_ss) == 3) {
-            printf ("Local time: %2d:%2d:%2d\n", l_hh, l_mm, l_ss);
+        /* set local time (HH:MM:SS) (resp: 0=invalid, 1=valid) */
+        } else if (sscanf (buf, ":SL%d:%d:%d#", &a, &b, &c) == 3) {
             if (send_str (fd, "0") == -1)
                 break;
-        /* ':SC12/31/11#' */
-        } else if (sscanf (buf, ":SC%d/%d/%d#", &d_mm, &d_dd, &d_yy) == 3) {
-            printf ("Handbox date: %2d/%2d/%2d\n", d_mm, d_dd, d_yy);
-            if (send_str (fd, "0Updating Planetary Data#") == -1)
+        /* set handbox date (MM/DD/YY) (resp: 0#=invalid, 1str#=valid) */
+        } else if (sscanf (buf, ":SC%d/%d/%d#", &a, &b, &c) == 3) {
+            if (send_str (fd, "0#") == -1)
                 break;
-        } else if (!strcmp (buf, ":GR#")) { /* read RA */
-            snprintf (buf, sizeof (buf), "00:00:00#");
-            if (send_str (fd, buf) == 1)
+            flag = 1; /* SkySafari expects unsolicited str after reconnect */
+        /* get telescope RA (resp: HH:MM.T or HH:MM:SS) */
+        } else if (!strcmp (buf, ":GR#")) {
+            if (send_str (fd, "00:00:00#") == -11)
                 break;
-        } else if (!strcmp (buf, ":RS#")) { /* set fast slew (no resp) */
-        } else if (!strcmp (buf, ":GVP#")) { /* get tel model */
-            snprintf (buf, sizeof (buf), "LX200-not-really#");
-            if (send_str (fd, buf) == 1)
+        /* set fast slew (resp: none) */
+        } else if (!strcmp (buf, ":RS#")) {
+        /* set slew rate to find rate (2nd fastest) (resp: none) */
+        } else if (!strcmp (buf, ":RM#")) {
+        /* set slew rate to centering rate (2nd slowest) (resp: none) */
+        } else if (!strcmp (buf, ":RC#")) {
+        /* set slew rate to guiding rate (slowest) (resp: none) */
+        } else if (!strcmp (buf, ":RG#")) {
+        /* get telescope product name (resp: str#) */
+        } else if (!strcmp (buf, ":GVP#")) {
+            if (send_str (fd, "ultima8drivecorrector#") == -1)
                 break;
-        } else if (!strcmp (buf, ":Q#:GD#'")) { /* halt cur slew (no resp) */
-                                                /* get dec */
-            snprintf (buf, sizeof (buf), "00*00'00#");
-            if (send_str (fd, buf) == 1)
+        /* halt all current slewing (resp: none) */
+        } else if (!strcmp (buf, ":Q#")) {
+        /* get telescope DEC (resp: sDD*MM or sDD*MM'SS) */
+        } else if (!strcmp (buf, ":GD#")) {
+            if (send_str (fd, "+01*01'01#") == -1)
                 break;
+        /* FIXME: combined halt, get DEC (skysafari) */
+        } else if (!strcmp (buf, ":Q#:GD#")) {
+            if (send_str (fd, "+01*01'01#") == -1)
+                break;
+        /* set target object RA (HH:MM.T) (resp: 0=invalid, 1=valid) */
+        } else if (sscanf (buf, ":Sr%d:%f#", &a, &B) == 2) {
+            if (send_str (fd, "1") == -1)
+                break;
+        /* set target object RA (HH:MM:SS) (resp: 0=invalid, 1=valid) */
+        } else if (sscanf (buf, ":Sr%d:%d:%d#", &a, &b, &c) == 3) {
+            if (send_str (fd, "1") == -1)
+                break;
+        /* set target object DEC (sDD*MM) (resp: 0=invalid, 1=valid) */
+        } else if (sscanf (buf, ":Sd%d*%d#", &a, &b) == 2) {
+            if (send_str (fd, "1") == -1)
+                break;
+        /* set target object DEC (sDD*MM:SS) (resp: 0=invalid, 1=valid) */
+        } else if (sscanf (buf, ":Sd%d*%d:%d#", &a, &b, &c) == 3) {
+            if (send_str (fd, "1") == -1)
+                break;
+        /* slew to target object (resp: 0=valid, 1str#=below horiz,
+           2str#=below higher(?)) */
+        } else if (!strcmp (buf, ":MS#")) {
+            if (send_str (fd, "0") == -1)
+                break;
+            /* SkySafari will issue :GD# and :GR# until target is reached,
+               or :Q# if "stop" is pressed. */
+        /* sync telescope's position with currently selected db object
+           coordinates (resp: str#) */
+        } else if (!strcmp (buf, ":CM#")) {
+            if (send_str (fd, "happy fun object#") == -1)
+                break;
+        /* move east (:Q# to stop) at current slew rate (resp: none) */
+        } else if (!strcmp (buf, ":Me#")) {
+        /* move west at current slew rate (resp: none) */
+        } else if (!strcmp (buf, ":Mw#")) {
+        /* move north at current slew rate (resp: none) */
+        } else if (!strcmp (buf, ":Mn#")) {
+        /* move south at current slew rate (resp: none) */
+        } else if (!strcmp (buf, ":Ms#")) {
+        } else {
+            fprintf (stderr, "unknown command\n");
         }
-
-        /* ':GD#' */
     } while (1);
 }
 
-void sigchld_handler(int s)
-{
-    while(waitpid(-1, NULL, WNOHANG) > 0);
-}
+/* Thanks Beej for your handy googleable socket example! */
 
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -145,7 +194,6 @@ int main(void)
     struct addrinfo hints, *servinfo, *p;
     struct sockaddr_storage their_addr;
     socklen_t sin_size;
-    struct sigaction sa;
     int yes=1;
     char s[INET6_ADDRSTRLEN];
     int rv;
@@ -187,45 +235,28 @@ int main(void)
         return 2;
     }
 
-    freeaddrinfo(servinfo); // all done with this structure
+    freeaddrinfo(servinfo);
 
     if (listen(sockfd, BACKLOG) == -1) {
         perror("listen");
         exit(1);
     }
 
-    sa.sa_handler = sigchld_handler; // reap all dead processes
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;
-    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-        perror("sigaction");
-        exit(1);
-    }
-
-    printf("server: waiting for connections...\n");
-
-    while(1) {  // main accept() loop
+    while(1) {
         sin_size = sizeof their_addr;
         new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
         if (new_fd == -1) {
-            perror("accept");
+            perror("R: accept");
             continue;
         }
 
         inet_ntop(their_addr.ss_family,
             get_in_addr((struct sockaddr *)&their_addr),
             s, sizeof s);
-        printf("server: got connection from %s\n", s);
 
-        if (!fork()) { // this is the child process
-            close(sockfd); // child doesn't need the listener
-
-            talk (new_fd);
-            
-            close(new_fd);
-            exit(0);
-        }
-        close(new_fd);  // parent doesn't need this
+        //fprintf(stderr, "R: connect %s\n", s);
+        talk (new_fd);
+        close(new_fd);
     }
 
     return 0;
