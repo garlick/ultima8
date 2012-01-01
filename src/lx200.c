@@ -22,10 +22,14 @@
 
 /* lx200.c - accept lx200 commands for SkySafari and SkyMap iPhone apps */
 
+
 /* This is just a test program to get the LX200 protocol subset worked out.
  *
  * N.B. SkySafari likes to drop the connection between commands.
  * N.B. SkyMap locks up or crashes on network errors
+ *
+ * Ref: "Meade Telescope Serial Command Protocol, Revision L", 9 October 2002.
+ * We emulate a subset of the LX200<16" ("classic") protocol.
  *
  * FIXME: properly handle commands that are not aligned on recv () message
  * boundaries.
@@ -90,23 +94,23 @@ void talk (int fd)
         fprintf (stderr, "R: %s\n",buf);
         /* set current site latitude (sDD*MM) (resp: 0=invalid, 1=valid) */
         if (sscanf (buf, ":St%d*%d#", &a, &b) == 2) {
-            if (send_str (fd, "0") == -1)
+            if (send_str (fd, "1") == -1)
                 break;
         /* set current site longitude (DDD*MM) (resp: 0=invalid, 1=valid) */
         } else if (sscanf (buf, ":Sg%d*%d#", &a, &b) == 2) {
-            if (send_str (fd, "0") == -1)
+            if (send_str (fd, "1") == -1)
                 break;
         /* set UTC offset (sHH.H) (resp: 0=invalid, 1=valid) */
         } else if (sscanf (buf, ":SG%f#", &A) == 1) {
-            if (send_str (fd, "0") == -1)
+            if (send_str (fd, "1") == -1)
                 break;
         /* set local time (HH:MM:SS) (resp: 0=invalid, 1=valid) */
         } else if (sscanf (buf, ":SL%d:%d:%d#", &a, &b, &c) == 3) {
-            if (send_str (fd, "0") == -1)
+            if (send_str (fd, "1") == -1)
                 break;
         /* set handbox date (MM/DD/YY) (resp: 0#=invalid, 1str#=valid) */
         } else if (sscanf (buf, ":SC%d/%d/%d#", &a, &b, &c) == 3) {
-            if (send_str (fd, "0#") == -1)
+            if (send_str (fd, "1#") == -1)
                 break;
             flag = 1; /* SkySafari expects unsolicited str after reconnect */
         /* get telescope RA (resp: HH:MM.T or HH:MM:SS) */
@@ -125,8 +129,6 @@ void talk (int fd)
         } else if (!strcmp (buf, ":GVP#")) {
             if (send_str (fd, "ultima8drivecorrector#") == -1)
                 break;
-        /* halt all current slewing (resp: none) */
-        } else if (!strcmp (buf, ":Q#")) {
         /* get telescope DEC (resp: sDD*MM or sDD*MM'SS) */
         } else if (!strcmp (buf, ":GD#")) {
             if (send_str (fd, "+01*01'01#") == -1)
@@ -171,6 +173,16 @@ void talk (int fd)
         } else if (!strcmp (buf, ":Mn#")) {
         /* move south at current slew rate (resp: none) */
         } else if (!strcmp (buf, ":Ms#")) {
+        /* halt all current slewing (resp: none) */
+        } else if (!strcmp (buf, ":Q#")) {
+        /* halt east slew (resp: none) */
+        } else if (!strcmp (buf, ":Qe#")) {
+        /* halt west slew (resp: none) */
+        } else if (!strcmp (buf, ":Qw#")) {
+        /* halt north slew (resp: none) */
+        } else if (!strcmp (buf, ":Qn#")) {
+        /* halt south slew (resp: none) */
+        } else if (!strcmp (buf, ":Qs#")) {
         } else {
             fprintf (stderr, "unknown command\n");
         }
