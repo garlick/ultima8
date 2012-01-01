@@ -1,3 +1,5 @@
+CFLAGS = -Wall
+
 all: lx200
 
 clean:

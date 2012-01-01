@@ -66,7 +66,7 @@ void talk (int fd)
     char buf[256];
     static int flag = 0;
     int a, b, c;
-    float A, B, C;
+    float A, B;
 
     if (flag) {
         if (send_str (fd, "#") == -1)
@@ -85,7 +85,7 @@ void talk (int fd)
         }
         /* special single char cmd */
         if (n == 1 && buf[0] == 0x6) {
-            fprintf (stderr, "R: ACK\n",buf);
+            fprintf (stderr, "R: ACK\n");
             if (send_str (fd, "P") == -1)
                 break;
             continue;
