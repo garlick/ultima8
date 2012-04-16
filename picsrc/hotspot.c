@@ -44,28 +44,32 @@ __CONFIG (4, LVP_OFF);
 #define LCD_DATA6       PortCbits.RC2 
 #define LCD_DATA7       PortCbits.RC3 
 
+#define LCD_DATA        PORTC
+
 #define LCD_EN          PORTAbits.RA0
 #define LCD_RS          PORTAbits.RA1
 #define LCD_RW          PORTAbits.RA2
-
-#define LCD_DATA        PORTC
 
 #define LCD_MAXCOL      16
 #define LCD_MAXROW      2
 
 #define islcd(c)        ((c) >= 0x20 && (c) <= 0x7d)
 
+#define LCD_CLEAR       lcd_write (0, 0x1)
+#define LCD_PUTC(c)     lcd_write (1, c)
+#define LCD_GOTO(x)     lcd_write (0, 0x80 + x)
+
 #define SERIAL_BAUD     115200
 
 typedef struct {
-    volatile unsigned char   buf[256]; /* MAX_CHAR so no wrap logic needed */
+    volatile unsigned char   buf[256];
     volatile unsigned char   head;
     volatile unsigned char   tail;
 } cbuf_t;
 
 static cbuf_t serial_in = { "", 0, 0 };
 
-/* overwrites tail */
+/* overwrites tail (call from ISR) */
 void
 cbuf_putc (cbuf_t *cbuf, unsigned char c)
 {
@@ -74,17 +78,24 @@ cbuf_putc (cbuf_t *cbuf, unsigned char c)
     cbuf->buf[cbuf->head++] = c;
 }
 
-/* spins until data available */
+/* spins until data available (call from non-ISR) */
 unsigned char
 cbuf_getc (cbuf_t *cbuf)
 {
+    unsigned char c;
+
+    /* we test the head, but modify the tail */
     while (cbuf->head == cbuf->tail)
         ;
-    return cbuf->buf[cbuf->tail++];
+    PIE1bits.RCIE = 0;
+    c = cbuf->buf[cbuf->tail++];
+    PIE1bits.RCIE = 1;
+
+    return c;
 }
 
 /* Spins until line is read.
- * Consume up to \n, but return at most length, always NULL terminated.
+ * Consume up to \n, but return at most len chars, always NULL terminated.
  * Do not return \n or \r characters.
  */
 int
@@ -114,7 +125,6 @@ lcd_read_nybble (void)
 {
     unsigned char c;
 
-    __delay_us (1);
     LCD_EN = 1;
     __delay_us (1);
     c = (LCD_DATA & 0x0f);
@@ -124,10 +134,11 @@ lcd_read_nybble (void)
 }
 
 unsigned char 
-lcd_read (void)
+lcd_read (char rs)
 {
     unsigned char c;
 
+    LCD_RS = rs;
     c = lcd_read_nybble () << 4;
     c |= lcd_read_nybble ();
 
@@ -135,15 +146,19 @@ lcd_read (void)
 }
 
 void
-lcd_waitbusy (void)
+lcd_wait_busy (void)
 {
+    unsigned char c;
+
     TRISC = 0x0f;
     LCD_RW = 1;
-    LCD_RS = 0;
-    while (((lcd_read () & 0x80)))
-        ;
+    __delay_us (5);
+    do {
+        c = lcd_read (0);
+    } while ((c & 0x80));
     LCD_RW = 0;
     TRISC = 0;
+    __delay_us (5);
 }
 
 void
@@ -154,40 +169,19 @@ lcd_write_nybble (unsigned char c)
 }
 
 void
-lcd_write (unsigned char c)
+lcd_write (char rs, unsigned char c)
 {
-    __delay_us(40);
+    lcd_wait_busy ();
+    LCD_RS = rs; 
     lcd_write_nybble (c >> 4);
     lcd_write_nybble (c);
-}
-
-void
-lcd_clear (void)
-{
-    LCD_RS = 0;
-    lcd_write (0x1);
-    __delay_ms (2);
-}
-
-void
-lcd_putc (const char c)
-{
-    LCD_RS = 1;
-    lcd_write (c);
 }
 
 void
 lcd_puts (const char *s)
 {
     while (*s != '\0')
-        lcd_putc (*s++);
-}
-
-void
-lcd_goto (unsigned char pos)
-{
-    LCD_RS = 0;
-    lcd_write (0x80 + pos);
+        LCD_PUTC (*s++);
 }
 
 /* Overwrite the selected LCD line (0, 1, ...) with s.
@@ -198,13 +192,13 @@ lcd_putline (int line, const char *s)
     int i = 0;
 
     if (line >= 0 && line < LCD_MAXROW) {
-        lcd_goto (line * 0x40);
+        LCD_GOTO (line * 0x40);
         while (s[i] != '\0' && i < LCD_MAXCOL) {
             if (islcd (s[i]))
-                lcd_putc (s[i++]);
+                LCD_PUTC (s[i++]);
         }
         while (i++ < LCD_MAXCOL)
-            lcd_putc (' ');
+            LCD_PUTC (' ');
     }
 }
 
@@ -224,13 +218,13 @@ lcd_init (void)
     __delay_us(200);
     lcd_strobe ();
     __delay_us (200);
-    LCD_DATA = 2;        /* select 4 bit mode */
+    LCD_DATA = 2;               /* select 4 bit mode */
     lcd_strobe ();
 
-    lcd_write (0x28);    /* set interface length */
-    lcd_write (0xc);     /* display on, cursor off, cursor no blink */
-    lcd_clear ();        /* clear screen */
-    lcd_write (0x6);     /* set entry mode */
+    lcd_write (0, 0x28);        /* set interface length */
+    lcd_write (0, 0xc);         /* display on, cursor off, cursor no blink */
+    LCD_CLEAR;                  /* clear screen */
+    lcd_write (0, 0x6);         /* set entry mode */
 }
 
 void
@@ -261,34 +255,6 @@ serial_putc(unsigned char byte)
     while(!TRMT)
         ;
     TXREG = byte;
-}
-
-unsigned char
-serial_getc (void)
-{
-    if (OERR) {
-        CREN = 0;
-        CREN = 1;
-    }
-    while(!RCIF)
-        ;
-    return RCREG;
-}
-
-unsigned char *
-serial_gets (unsigned char *buf, int len)
-{
-    unsigned char c;
-    int i = 0;
-
-    do {
-        c = serial_getc ();
-        if (i < len - 1 && islcd(c))
-            buf[i++] = c;
-    } while (c != '\n');
-    buf[i] = '\0';
-
-    return buf;
 }
 
 void interrupt 
