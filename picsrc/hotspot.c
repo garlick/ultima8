@@ -57,54 +57,131 @@ __CONFIG (4, LVP_OFF);
 
 #define SERIAL_BAUD     115200
 
+#define CBUF_SIZE       80
+
+#define CBUF_PLUSONE(x) ((x) < CBUF_SIZE - 1 ? (x) + 1 : 0)
+#define CBUF_INC(x)     ((x) = CBUF_PLUSONE(x))
+
+#define CBUF_FULL(c)    (CBUF_PLUSONE((c)->head) == (c)->tail)
+#define CBUF_EMPTY(c)   ((c)->head == (c)->tail)
+
 typedef struct {
-    volatile unsigned char   buf[256];
+    volatile unsigned char   buf[CBUF_SIZE];
     volatile unsigned char   head;
     volatile unsigned char   tail;
 } cbuf_t;
 
 static cbuf_t serial_in = { "", 0, 0 };
+static cbuf_t serial_out = { "", 0, 0 };
 
-/* Overwrites tail (call from ISR) */
 void
-cbuf_putc (cbuf_t *cbuf, unsigned char c)
+serial_recv (void)
 {
-    if (cbuf->head + 1 == cbuf->tail)
-        cbuf->tail++;
-    cbuf->buf[cbuf->head++] = c;
+    if (CBUF_FULL(&serial_in))
+        CBUF_INC(serial_in.tail);
+    serial_in.buf[CBUF_INC(serial_in.head)] = RCREG;
 }
 
-/* Spins until data available (call from non-ISR) */
-unsigned char
-cbuf_getc (cbuf_t *cbuf)
+void
+serial_xmit (void)
 {
-    unsigned char c;
+    if (!CBUF_EMPTY(&serial_out) && TXSTAbits.TRMT)
+        TXREG = serial_out.buf[CBUF_INC(serial_out.tail)];
+    if (CBUF_EMPTY(&serial_out))
+        PIE1bits.TXIE = 0;
+}
 
-    while (cbuf->head == cbuf->tail)
+void
+serial_getc (unsigned char *cp, char in_interrupt)
+{
+    while (CBUF_EMPTY(&serial_in))
         ;
     PIE1bits.RCIE = 0;
-    c = cbuf->buf[cbuf->tail++];
+    *cp = serial_in.buf[CBUF_INC(serial_in.tail)];
     PIE1bits.RCIE = 1;
-
-    return c;
 }
 
-/* Spins until line is read (call from non-ISR).
- * Consume up to \n, but return at most len chars, always NULL terminated.
- * Do not return \n or \r characters.
- */
 void
-cbuf_gets (cbuf_t *cbuf, unsigned char *buf, int len)
+serial_putc (unsigned char c)
+{
+    while (CBUF_FULL(&serial_out))
+        ;
+    PIE1bits.TXIE = 0;
+    serial_out.buf[CBUF_INC(serial_out.head)] = c;
+    PIE1bits.TXIE = 1;
+}
+
+void
+serial_gets (unsigned char *buf, int len)
 {
     unsigned char c;
     int i = 0;
 
     do {
-        c = cbuf_getc (cbuf);
+        serial_getc (&c, 0);
         if (i < len - 1 && c != '\r' && c != '\n')
             buf[i++] = c;
     } while (c != '\n');
     buf[i] = '\0';
+}
+
+void
+serial_puts (const char *s)
+{
+    while (*s)
+        serial_putc (*s++);
+    serial_putc ('\n');
+}
+
+void
+serial_init (void)
+{
+    TRISBbits.RB5 = 1; 
+    TRISBbits.RB7 = 1;
+
+    /* Set baud rate.
+     * N.B. BRGH, BRG16, and divisor might needed to be changed
+     * to get an accurate rate (see data sheet).
+     * These settings are are for SERIAL_BAUD of 115200.
+     */
+    TXSTAbits.BRGH = 1;
+    BAUDCONbits.BRG16 = 1;
+    SPBRG = ((int)(_XTAL_FREQ/(4UL * SERIAL_BAUD) - 1));
+    SPBRGH = 0;
+
+    TXSTAbits.SYNC = 0;
+    RCSTAbits.SPEN = 1;
+    RCSTAbits.CREN = 1;
+    TXSTAbits.TXEN = 1;
+}
+
+char
+serial_checkerr (void)
+{
+    char errors = 0;
+
+    if (RCSTAbits.OERR) { /* overrun */
+        RCSTAbits.CREN = 0;
+        RCSTAbits.CREN = 1;
+        errors++;
+    }
+    if (RCSTAbits.FERR) { /* framing error */
+        unsigned char dummy = RCREG;
+        errors++;
+    }
+    return errors;
+}
+
+void interrupt 
+isr (void)
+{
+    serial_checkerr ();
+    if (PIE1bits.RCIE && RCIF) {
+        serial_recv ();
+    }
+    if (PIE1bits.TXIE && TXIF) {
+        serial_xmit ();
+    }
 }
 
 void
@@ -241,48 +318,6 @@ lcd_init (void)
 }
 
 void
-serial_init (void)
-{
-    TRISBbits.RB5 = 1; 
-    TRISBbits.RB7 = 1;
-
-    /* Set baud rate.
-     * N.B. BRGH, BRG16, and divisor might needed to be changed
-     * to get an accurate rate (see data sheet).
-     * These settings are are for SERIAL_BAUD of 115200.
-     */
-    TXSTAbits.BRGH = 1;
-    BAUDCONbits.BRG16 = 1;
-    SPBRG = ((int)(_XTAL_FREQ/(4UL * SERIAL_BAUD) - 1));
-    SPBRGH = 0;
-
-    TXSTAbits.SYNC = 0;
-    RCSTAbits.SPEN = 1;
-    RCSTAbits.CREN = 1;
-    TXSTAbits.TXEN = 1;
-}
-
-void
-serial_putc(unsigned char byte)
-{
-    while(!TRMT)
-        ;
-    TXREG = byte;
-}
-
-void interrupt 
-isr (void)
-{
-    if (PIE1bits.RCIE && RCIF) {
-        cbuf_putc (&serial_in, RCREG);
-    }
-    if (PIE1bits.TXIE && TXIF) {
-        /* FIXME: set TXREG */
-        TXIE = 0;
-    }
-}
-
-void
 main(void)
 {
     static unsigned char line[17];
@@ -307,8 +342,17 @@ main(void)
     PIE1bits.RCIE = 1;          /* enable USART receive interrupts */
 
     for (;;) {
-        cbuf_gets (&serial_in, line, sizeof (line));
-        lcd_putline (0, line);
+        serial_gets (line, sizeof (line));
+        if (!strcmp (line, "::foo")) {
+            lcd_putline (1, "got foo!");
+            serial_puts ("got foo!");
+        } else if (!strcmp (line, "::bar")) {
+            lcd_putline (1, "got bar!");
+            serial_puts ("got bar!");
+        } else {
+            lcd_putline (0, line);
+            lcd_putline (1, "");
+        }
     }
 }
 
