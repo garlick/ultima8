@@ -1,5 +1,5 @@
 /*****************************************************************************\G
- *  Copyright (C) 2011 Jim Garlick
+ *  Copyright (C) 2012 Jim Garlick
  *  
  *  This file is part of ultima8drivecorrector, replacement base electronics
  *  for the Celestron Ultima 8 telescope.  For details, see
@@ -55,10 +55,6 @@ __CONFIG (4, LVP_OFF);
 
 #define islcd(c)        ((c) >= 0x20 && (c) <= 0x7d)
 
-#define LCD_CLEAR       lcd_write (0, 0x1)
-#define LCD_PUTC(c)     lcd_write (1, c)
-#define LCD_GOTO(x)     lcd_write (0, 0x80 + x)
-
 #define SERIAL_BAUD     115200
 
 typedef struct {
@@ -69,7 +65,7 @@ typedef struct {
 
 static cbuf_t serial_in = { "", 0, 0 };
 
-/* overwrites tail (call from ISR) */
+/* Overwrites tail (call from ISR) */
 void
 cbuf_putc (cbuf_t *cbuf, unsigned char c)
 {
@@ -78,13 +74,12 @@ cbuf_putc (cbuf_t *cbuf, unsigned char c)
     cbuf->buf[cbuf->head++] = c;
 }
 
-/* spins until data available (call from non-ISR) */
+/* Spins until data available (call from non-ISR) */
 unsigned char
 cbuf_getc (cbuf_t *cbuf)
 {
     unsigned char c;
 
-    /* we test the head, but modify the tail */
     while (cbuf->head == cbuf->tail)
         ;
     PIE1bits.RCIE = 0;
@@ -94,11 +89,11 @@ cbuf_getc (cbuf_t *cbuf)
     return c;
 }
 
-/* Spins until line is read.
+/* Spins until line is read (call from non-ISR).
  * Consume up to \n, but return at most len chars, always NULL terminated.
  * Do not return \n or \r characters.
  */
-int
+void
 cbuf_gets (cbuf_t *cbuf, unsigned char *buf, int len)
 {
     unsigned char c;
@@ -152,13 +147,13 @@ lcd_wait_busy (void)
 
     TRISC = 0x0f;
     LCD_RW = 1;
-    __delay_us (5);
+    __delay_us (5);         /* value determined experimentally */
     do {
         c = lcd_read (0);
     } while ((c & 0x80));
     LCD_RW = 0;
     TRISC = 0;
-    __delay_us (5);
+    __delay_us (5);         /* value determined experimentally */
 }
 
 void
@@ -178,10 +173,28 @@ lcd_write (char rs, unsigned char c)
 }
 
 void
+lcd_clear (void)
+{
+    lcd_write (0, 0x1);
+}
+
+void
+lcd_putc (unsigned char c)
+{
+    lcd_write (1, c);
+}
+
+void
+lcd_goto (unsigned char x)
+{
+    lcd_write (0, 0x80 + x);
+}
+
+void
 lcd_puts (const char *s)
 {
     while (*s != '\0')
-        LCD_PUTC (*s++);
+        lcd_putc (*s++);
 }
 
 /* Overwrite the selected LCD line (0, 1, ...) with s.
@@ -192,13 +205,13 @@ lcd_putline (int line, const char *s)
     int i = 0;
 
     if (line >= 0 && line < LCD_MAXROW) {
-        LCD_GOTO (line * 0x40);
+        lcd_goto (line * 0x40);
         while (s[i] != '\0' && i < LCD_MAXCOL) {
             if (islcd (s[i]))
-                LCD_PUTC (s[i++]);
+                lcd_putc (s[i++]);
         }
         while (i++ < LCD_MAXCOL)
-            LCD_PUTC (' ');
+            lcd_putc (' ');
     }
 }
 
@@ -223,7 +236,7 @@ lcd_init (void)
 
     lcd_write (0, 0x28);        /* set interface length */
     lcd_write (0, 0xc);         /* display on, cursor off, cursor no blink */
-    LCD_CLEAR;                  /* clear screen */
+    lcd_clear;                  /* clear screen */
     lcd_write (0, 0x6);         /* set entry mode */
 }
 
