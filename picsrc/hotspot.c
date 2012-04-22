@@ -39,16 +39,18 @@ __CONFIG (4, LVP_OFF);
 #error code assumes 18F14K22 chip.
 #endif
 
-#define LCD_DATA4       PortCbits.RC0
-#define LCD_DATA5       PortCbits.RC1
-#define LCD_DATA6       PortCbits.RC2 
-#define LCD_DATA7       PortCbits.RC3 
+/* N.B. read-modify-write should use LATC (output latch reg) not PORTC */
+#define LCD_DATA4       PORTCbits.RC0
+#define LCD_DATA5       PORTCbits.RC1
+#define LCD_DATA6       PORTCbits.RC2 
+#define LCD_DATA7       PORTCbits.RC3 
 
-#define LCD_DATA        PORTC
+#define LCD_DATA_INPUT  PORTC
+#define LCD_DATA        LATC
 
-#define LCD_EN          PORTAbits.RA0
-#define LCD_RS          PORTAbits.RA1
-#define LCD_RW          PORTAbits.RA2
+#define LCD_EN          LATCbits.LATC4
+#define LCD_RS          LATCbits.LATC5
+#define LCD_RW          LATCbits.LATC6
 
 #define LCD_MAXCOL      16
 #define LCD_MAXROW      2
@@ -199,7 +201,7 @@ lcd_read_nybble (void)
 
     LCD_EN = 1;
     __delay_us (1);
-    c = (LCD_DATA & 0x0f);
+    c = LCD_DATA_INPUT & 0x0f;
     LCD_EN = 0;
 
     return c;
@@ -236,7 +238,7 @@ lcd_wait_busy (void)
 void
 lcd_write_nybble (unsigned char c)
 {
-    LCD_DATA = c & 0x0f;
+    LCD_DATA = (LCD_DATA & 0xf0) | (c & 0x0f);
     lcd_strobe ();
 }
 
