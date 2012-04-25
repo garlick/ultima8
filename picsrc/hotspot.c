@@ -25,8 +25,8 @@
 /* NOTE: compiled with hi-tech C pro V9.80 */
 
 #include <htc.h>
-#include <ctype.h>
 #include <string.h>
+#include <stdlib.h>
 
 #define _XTAL_FREQ 64000000UL
 
@@ -57,6 +57,14 @@ __CONFIG (4, LVP_OFF);
 
 #define islcd(c)        ((c) >= 0x20 && (c) <= 0x7d)
 
+#define ENC_RA_A        PORTAbits.RA0
+#define ENC_RA_B        PORTAbits.RA1
+#define ENC_DEC_A       PORTAbits.RA2
+#define ENC_DEC_B       PORTAbits.RA3
+
+#define ENC_RA_RES      2160  // convenient: 360*6 (1 tic = 10')
+#define ENC_DEC_RES     2160
+
 #define SERIAL_BAUD     115200
 
 #define CBUF_SIZE       80
@@ -76,6 +84,11 @@ typedef struct {
 static cbuf_t serial_in = { "", 0, 0 };
 static cbuf_t serial_out = { "", 0, 0 };
 
+void enc_tic (void);
+
+static int enc_dec;
+static int enc_ra;
+
 void
 serial_recv (void)
 {
@@ -94,7 +107,7 @@ serial_xmit (void)
 }
 
 void
-serial_getc (unsigned char *cp, char in_interrupt)
+serial_getc (unsigned char *cp)
 {
     while (CBUF_EMPTY(&serial_in))
         ;
@@ -120,7 +133,7 @@ serial_gets (unsigned char *buf, int len)
     int i = 0;
 
     do {
-        serial_getc (&c, 0);
+        serial_getc (&c);
         if (i < len - 1 && c != '\r' && c != '\n')
             buf[i++] = c;
     } while (c != '\n');
@@ -183,6 +196,10 @@ isr (void)
     }
     if (PIE1bits.TXIE && TXIF) {
         serial_xmit ();
+    }
+    if (INTCONbits.RABIE && INTCONbits.RABIF) {
+        enc_tic ();
+        INTCONbits.RABIF = 0;
     }
 }
 
@@ -320,9 +337,53 @@ lcd_init (void)
 }
 
 void
+enc_tic_update (unsigned char old, unsigned char new, int *count)
+{
+    if (old != new) {
+        if (((old >> 1) ^ new) & 0x01)
+            (*count)++;
+        else
+            (*count)--;
+    }
+}
+
+void
+enc_tic (void)
+{
+    static unsigned char old = 0xff;
+    unsigned char new = PORTA;
+
+    enc_tic_update (old & 0x3, new & 0x3, &enc_ra);
+    enc_tic_update ((old >> 2) & 0x3, (new >> 2) & 0x3, &enc_dec);
+    old = new;
+}
+
+void
+enc_init (void)
+{
+    TRISAbits.RA0 = 1;      /* inputs */
+    TRISAbits.RA1 = 1;
+    TRISAbits.RA2 = 1;
+    //TRISAbits.RA3 = 1;    /* RA3/^MCLR has no output capability */
+
+    WPUAbits.WPUA0 = 1;     /* weak pullups */
+    WPUAbits.WPUA1 = 1;
+    WPUAbits.WPUA2 = 1;
+    WPUAbits.WPUA3 = 1;
+
+    IOCAbits.IOCA0 = 1;     /* interrupt on change */
+    IOCAbits.IOCA1 = 1;
+    IOCAbits.IOCA2 = 1;
+    IOCAbits.IOCA3 = 1;
+
+    INTCONbits.RABIF = 0;   /* clear IOC flag */
+}
+
+void
 main(void)
 {
     static unsigned char line[17];
+    int i;
 
     OSCCONbits.IRCF = 7;        /* system clock HFOSC 16 MHz (x 4 with PLL) */
 
@@ -331,6 +392,7 @@ main(void)
     TRISA = 0;                  /* disable all digital inputs */
     TRISB = 0;
     TRISC = 0;
+    INTCON2bits.RABPU = 0;      /* enable pullups that have WPU* bits set */
     WPUA = 0;                   /* disable all pullups */
     WPUB = 0;
     IOCA = 0;                   /* disable all interrupt on change bits */
@@ -338,11 +400,16 @@ main(void)
 
     lcd_init ();
     serial_init ();
+    enc_init ();
 
     INTCONbits.PEIE = 1;        /* enable peripheral interrupts */
     INTCONbits.GIE = 1;         /* enable global interrupts */
     PIE1bits.RCIE = 1;          /* enable USART receive interrupts */
+    INTCONbits.RABIE = 1;       /* enable interrupt on change interrupts */
 
+    enc_dec = 0;
+    enc_ra = 0;
+#if 0
     for (;;) {
         serial_gets (line, sizeof (line));
         if (!strcmp (line, "::foo")) {
@@ -356,6 +423,33 @@ main(void)
             lcd_putline (1, "");
         }
     }
+#endif
+#if 1
+    lcd_putline (0, "hello");
+
+    for (;;) {
+        INTCONbits.RABIE = 0;
+        if (enc_ra >= 0) {
+            line[0] = '+';
+            itoa (&line[1], enc_ra, 10);
+        } else 
+            itoa (&line[0], enc_ra, 10);
+        for (i = 0; i < 8; i++) {
+            if (line[i] == '\0')
+                line[i] = ' ';
+        }
+        if (enc_dec >= 0) {
+            line[8] = '+';
+            itoa (&line[9], enc_dec, 10);
+        } else
+            itoa (&line[8], enc_dec, 10);
+        INTCONbits.RABIE = 1;
+
+        lcd_putline (1, line);
+
+        __delay_ms (10);
+    }       
+#endif
 }
 
 /*
