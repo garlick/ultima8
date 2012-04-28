@@ -23,14 +23,14 @@ endif
 
 CFLAGS += -Wall
 
-all: lx200
+all: netscope
 
 openwrt: $(TRX)
 
-$(TRX): lx200
+$(TRX): netscope
 	mkdir -m 0755 -p $(TOPDIR)/files/bin
-	cp lx200 $(TOPDIR)/files/bin
-	chmod 755 $(TOPDIR)/files/bin/lx200
+	cp netscope $(TOPDIR)/files/bin
+	chmod 755 $(TOPDIR)/files/bin/netscope
 	make -C $(TOPDIR)
 
 # hold down reset while powering up
@@ -40,4 +40,4 @@ upload: $(TRX)
 		--local-file $(TRX) 192.168.1.1
 
 clean:
-	rm -f a.out core *.o lx200
+	rm -f a.out core *.o netscope
