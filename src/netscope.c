@@ -20,7 +20,7 @@
  *  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA.
 \*****************************************************************************/
 
-/* netscope.c - accept commands for SkySafari and SkyMap iPhone apps */
+/* netscope.c - accept commands for Sky Safari and SkyMap iPhone apps */
 
 /* cc -o netscope netscope.c
  * ./netscope -d to test without PIC 
@@ -96,8 +96,7 @@ void enc_srv (int fd)
         buf[n] = '\0';
         if (debug)
             fprintf (stderr, "R: %s\n",buf);
-        /* Sky Safari sends "QQQQQQQQQQQQ" the first time
-         */
+        /* Sky Safari: "QQQQQQQQQQQQ" sent on first connect, "Q" after */
         if ((buf[0] == 'Q')) {       /* get encoder position */
             query_encoders (&ra, &dec);
             snprintf (buf, sizeof(buf), "%+.5d\t%+.5d\r", ra, dec);
@@ -106,7 +105,7 @@ void enc_srv (int fd)
             snprintf (buf, sizeof(buf), "%+.5d\t%+.5d\r",
                 enc_ra_res, enc_dec_res);
             send_str (fd, buf);
-        /* Untested, sky safari doesn't use? */
+        /* Sky Safari: not used far as I can tell */
         } else if (buf[0] == 'Z') {  /* set encoder resolution */
             if (sscanf (buf + 1, "%d%d", &enc_ra_res, &enc_dec_res) != 2) {
                 if (debug)
@@ -371,12 +370,9 @@ int main(int argc, char *argv[])
         }
     } 
 
-    /* N.B.
-     * - SkySafari likes to drop the connection between commands.
-     * - SkyMap locks up or crashes on network errors
-     */
     svc_fd = setup_service ();
     for (;;) {
+        /* Sky Safari: reconnects for each command. */
         new_fd = accept_connection (svc_fd);
         switch (mode) {
             case MODE_ENC:

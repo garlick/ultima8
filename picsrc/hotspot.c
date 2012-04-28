@@ -27,6 +27,7 @@
 #include <htc.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #define _XTAL_FREQ 64000000UL
 
@@ -57,6 +58,11 @@ __CONFIG (4, LVP_OFF);
 
 #define islcd(c)        ((c) >= 0x20 && (c) <= 0x7d)
 
+#define TIMER_INTR_FREQ       10
+#define TIMER_PRESCALER_RATIO 256
+#define TIMER_COUNT_FREQ      (_XTAL_FREQ / (4 * TIMER_PRESCALER_RATIO))
+#define TIMER_COUNT_100MS     (65026L - (TIMER_COUNT_FREQ/TIMER_INTR_FREQ))
+
 #define ENC_RA_A        PORTAbits.RA0
 #define ENC_RA_B        PORTAbits.RA1
 #define ENC_DEC_A       PORTAbits.RA2
@@ -85,9 +91,10 @@ static cbuf_t serial_in = { "", 0, 0 };
 static cbuf_t serial_out = { "", 0, 0 };
 
 void enc_tic (void);
+void lcd_putline (int line, const char *s);
 
-static int enc_dec;
-static int enc_ra;
+static int enc_dec = 0;
+static int enc_ra = 0;
 
 void
 serial_recv (void)
@@ -126,18 +133,31 @@ serial_putc (unsigned char c)
     PIE1bits.TXIE = 1;
 }
 
-void
+int
 serial_gets (unsigned char *buf, int len)
 {
     unsigned char c;
-    int i = 0;
+    int i;
+    int ready = 0;
 
-    do {
-        serial_getc (&c);
-        if (i < len - 1 && c != '\r' && c != '\n')
-            buf[i++] = c;
-    } while (c != '\n');
-    buf[i] = '\0';
+    PIE1bits.TXIE = 0;
+    i = serial_in.tail;
+    while (i != serial_in.head && !ready) {
+        if (serial_in.buf[CBUF_INC(i)] == '\n')
+            ready = 1;
+    }
+    PIE1bits.TXIE = 1;
+    if (ready) {
+        i = 0;
+        do {
+            serial_getc (&c);
+            if (i < len - 1 && c != '\r' && c != '\n')
+                buf[i++] = c;
+        } while (c != '\n');
+        buf[i] = '\0';
+    }
+
+    return ready;
 }
 
 void
@@ -187,6 +207,23 @@ serial_checkerr (void)
     return errors;
 }
 
+void
+timer_tic (void)
+{
+    /* nothing to do at the moment */
+}
+
+void
+timer_init (void)
+{
+    T0CONbits.T0PS = 7;         /* set prescaler to 1:256 */
+    PSA = 0;                    /* assign prescaler */
+    T0CS = 0;                   /* use instr cycle clock (CLOCK_FREQ/4) */
+    T08BIT = 0;                 /* 16 bit mode */
+    TMR0 = TIMER_COUNT_100MS;   /* load count */
+    TMR0ON = 1;                 /* start timer0 */
+}
+
 void interrupt 
 isr (void)
 {
@@ -200,6 +237,11 @@ isr (void)
     if (INTCONbits.RABIE && INTCONbits.RABIF) {
         enc_tic ();
         INTCONbits.RABIF = 0;
+    }
+    if (INTCONbits.TMR0IE && INTCONbits.TMR0IF) {
+        timer_tic ();
+        TMR0 = TIMER_COUNT_100MS;
+        TMR0IF = 0;
     }
 }
 
@@ -340,7 +382,7 @@ void
 enc_tic_update (unsigned char old, unsigned char new, int *count)
 {
     if (old != new) {
-        if (((old >> 1) ^ new) & 0x01)
+        if (((old >> 1) ^ new) & 0x01) // grey code trick to get direction
             (*count)++;
         else
             (*count)--;
@@ -350,7 +392,7 @@ enc_tic_update (unsigned char old, unsigned char new, int *count)
 void
 enc_tic (void)
 {
-    static unsigned char old = 0xff;
+    static unsigned char old = 0;
     unsigned char new = PORTA;
 
     enc_tic_update (old & 0x3, new & 0x3, &enc_ra);
@@ -401,55 +443,32 @@ main(void)
     lcd_init ();
     serial_init ();
     enc_init ();
-
+    //timer_init ();
+    
     INTCONbits.PEIE = 1;        /* enable peripheral interrupts */
     INTCONbits.GIE = 1;         /* enable global interrupts */
     PIE1bits.RCIE = 1;          /* enable USART receive interrupts */
     INTCONbits.RABIE = 1;       /* enable interrupt on change interrupts */
+    //INTCONbits.TMR0IE = 1;      /* enable timer0 interrupt */
 
-    enc_dec = 0;
-    enc_ra = 0;
-#if 0
     for (;;) {
-        serial_gets (line, sizeof (line));
-        if (!strcmp (line, "::foo")) {
-            lcd_putline (1, "got foo!");
-            serial_puts ("got foo!");
-        } else if (!strcmp (line, "::bar")) {
-            lcd_putline (1, "got bar!");
-            serial_puts ("got bar!");
-        } else {
-            lcd_putline (0, line);
-            lcd_putline (1, "");
+        if (serial_gets (line, sizeof (line))) {
+            if (!strncmp (line, "::Q", 3)) { // Tangent 13 char format
+                INTCONbits.RABIE = 0;
+                sprintf (line, "%+.5d\t%+.5d\n", enc_ra, enc_dec);
+                serial_puts (line);
+                INTCONbits.RABIE = 1;
+            } else {
+                lcd_putline (0, line);
+            }
         }
-    }
-#endif
-#if 1
-    lcd_putline (0, "hello");
 
-    for (;;) {
         INTCONbits.RABIE = 0;
-        if (enc_ra >= 0) {
-            line[0] = '+';
-            itoa (&line[1], enc_ra, 10);
-        } else 
-            itoa (&line[0], enc_ra, 10);
-        for (i = 0; i < 8; i++) {
-            if (line[i] == '\0')
-                line[i] = ' ';
-        }
-        if (enc_dec >= 0) {
-            line[8] = '+';
-            itoa (&line[9], enc_dec, 10);
-        } else
-            itoa (&line[8], enc_dec, 10);
+        sprintf (line, "X=%+.4d Y=%+.4d", enc_ra, enc_dec);
         INTCONbits.RABIE = 1;
-
         lcd_putline (1, line);
-
         __delay_ms (10);
-    }       
-#endif
+    }
 }
 
 /*
