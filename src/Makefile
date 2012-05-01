@@ -1,3 +1,5 @@
+RELOAD_IP=192.168.1.1
+REGULAR_IP=192.168.1.1
 
 # wl-520gu attempt with trunk, hit same wifi bug as with precompiled 10.03.1
 #TOPDIR=/home/garlick/work/openwrt/openwrt/trunk
@@ -37,7 +39,11 @@ $(TRX): netscope
 # wl-520gu will be 192.168.1.1 awaiting tftp of boot image
 upload: $(TRX)
 	atftp --trace --option "timeout 1" --option "mode octet" --put \
-		--local-file $(TRX) 192.168.1.1
+		--local-file $(TRX) $(RELOAD_IP)
+
+scp: netscope
+	scp $< root@$(REGULAR_IP):/bin/
+	
 
 clean:
 	rm -f a.out core *.o netscope

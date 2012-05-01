@@ -37,10 +37,12 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/types.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
+#include <termios.h>
 #include <getopt.h>
 
 typedef enum { MODE_ENC, MODE_LX200 } emumode_t;
@@ -48,10 +50,33 @@ typedef enum { MODE_ENC, MODE_LX200 } emumode_t;
 #define PORT "4030"
 #define BACKLOG 5
 
-static int enc_ra_res = 2160;
-static int enc_dec_res = 2160;
+static int enc_ra_res = 10000;
+static int enc_dec_res = 10000;
 
 static int debug = 0;
+
+int
+open_serial(char *dev)
+{
+    struct termios tio;
+    int fd;
+
+    fd = open(dev, O_RDWR | O_NOCTTY);
+    if (fd < 0) {
+        perror (dev);
+        exit (1);
+    }
+    tcgetattr(fd, &tio);
+    tio.c_cflag = B115200 | CS8 | CLOCAL | CREAD;
+    tio.c_iflag = IGNBRK | IGNPAR;
+    tio.c_oflag = ONLRET;
+    tio.c_lflag = 0;
+    tio.c_cc[VMIN] = 1;
+    tio.c_cc[VTIME] = 1;
+    tcsetattr(fd, TCSANOW, &tio);
+
+    return fd;
+}
 
 int send_str (int fd, char *s)
 {
@@ -65,18 +90,64 @@ int send_str (int fd, char *s)
     return r;
 }
 
-void query_encoders (int *ra, int *dec)
+void
+serial_puts (int fd, char *s)
 {
-    /* FIXME: send    "::Q\n" */
-    /* FIXME: expect  "%d\t%d\r" */
-    *ra = 0;
-    *dec = 0;
+    int len = strlen (s);
+    int n;
+
+    while (len > 0) {
+        n = write (fd, s, len);
+        if (n > 0) {
+            len -= n;
+            s += n;
+        }
+        if (n < 0) {
+            perror ("serial write");
+            exit (1);
+        }
+    }
+}
+
+void
+serial_gets (int fd, char *buf, int len)
+{
+    int n;
+
+    do {
+        n = read (fd, buf, len);
+        if (n == 0) {
+            fprintf (stderr, "EOF on serial read");
+            exit (1);
+        }
+        if (n < 0) {
+            perror ("serial read");
+            exit (1);
+        }
+        buf[n] = '\0';
+        if (buf[n - 1] == '\n')
+            break;
+        buf += n;
+        len -= n;
+    } while (len > 0);
+}
+
+void query_encoders (int sfd, int *ra, int *dec)
+{
+    char buf[80];
+
+    serial_puts(sfd , "::Q\n");
+    serial_gets (sfd, buf, sizeof (buf));
+    if (sscanf (buf, "%d%d", ra, dec) != 2) {
+        perror ("error parsing serial result");
+        exit (1);
+    }
 }
 
 /* Sky Safari "Basic Encoder" or "NGC Max".
  * AKA the Tangent/BBox protocol.
  */
-void enc_srv (int fd)
+void enc_srv (int fd, int sfd)
 {
     ssize_t n;
     char buf[256];
@@ -98,7 +169,7 @@ void enc_srv (int fd)
             fprintf (stderr, "R: %s\n",buf);
         /* Sky Safari: "QQQQQQQQQQQQ" sent on first connect, "Q" after */
         if ((buf[0] == 'Q')) {       /* get encoder position */
-            query_encoders (&ra, &dec);
+            query_encoders (sfd, &ra, &dec);
             snprintf (buf, sizeof(buf), "%+.5d\t%+.5d\r", ra, dec);
             send_str (fd, buf);
         } else if (buf[0] == 'H') {  /* get encoder resolution */
@@ -121,7 +192,7 @@ void enc_srv (int fd)
  * TODO: only reached the point where the protocol subset used by the
  * two iphone apps is figured out.  No actual functionality yet!
  */
-void lx200_srv (int fd)
+void lx200_srv (int fd, int sfd)
 {
     ssize_t n;
     char buf[256];
@@ -350,9 +421,10 @@ int main(int argc, char *argv[])
 {
     int c;
     emumode_t mode = MODE_ENC; 
-    int svc_fd, new_fd;
+    int svc_fd, new_fd, sfd;
+    char *devpath = "/dev/console";
 
-    while ((c = getopt (argc, argv, "dm:")) != -1) {
+    while ((c = getopt (argc, argv, "dm:s:")) != -1) {
         switch (c) {
             case 'd':
                 debug = 1;
@@ -365,26 +437,36 @@ int main(int argc, char *argv[])
                 else
                     usage ();
                 break;
+            case 's':
+                devpath = optarg;
+                break;
             default:
                 usage ();
         }
-    } 
+    }
 
+    if (!(sfd = open_serial (devpath))) {
+        perror (devpath);
+        exit (1);
+    }
+    serial_puts (sfd, "Ultima8 Netscope\n");
     svc_fd = setup_service ();
     for (;;) {
         /* Sky Safari: reconnects for each command. */
         new_fd = accept_connection (svc_fd);
         switch (mode) {
             case MODE_ENC:
-                enc_srv (new_fd);
+                enc_srv (new_fd, sfd);
                 break;
             case MODE_LX200:
-                lx200_srv (new_fd);
+                lx200_srv (new_fd, sfd);
                 break;
         }
         close(new_fd);
     }
 
+    close (svc_fd);
+    close (sfd);
     return 0;
 }
 
