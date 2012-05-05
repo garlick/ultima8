@@ -1,0 +1,15 @@
++---------------------------------------------------------------------------+
+| Release 0.1                                                    1 May 2012 |
++---------------------------------------------------------------------------+
+* Ultima base status: working with some caveats
+  - The 1A fuse was replaced with a 2A fuse to address blown fuse
+    when either RA or DEC motors were manipulated with the handbox.
+    The higher than expected current drain has not yet been explained.
+  - Noisy Celestron motodec can reset PIC in base (need better filtering
+    or power supply isolation?)
+
+* Wifi Hotspot: working with 10K tick JMI encoders and Sky Safari for
+  iPad/iPhone.  Configure SkySafari for "simple encoder" or "NGC Max",
+  then select "get encoder resolution automatically".  The Wifi Hotspot
+  is emulating a Tangent-protocol serial encoder box attached to a
+  serial-to-network adapter listening on port 4030.  
