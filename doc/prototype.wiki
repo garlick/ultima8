@@ -1,0 +1,15 @@
+#summary Ultima 8 Drive Corrector Prototype (old v1)
+
+Here are some photos of the drive corrector prototype.
+
+The modified faceplate:
+
+http://wiki.ultima8drivecorrector.googlecode.com/git/images/faceplate.png
+
+Faceplate removed, showing transformer mounted next to worm drive, and perfboard attached to back of faceplate:
+
+http://wiki.ultima8drivecorrector.googlecode.com/git/images/openbase.png
+
+The other side of the perfboard:
+
+http://wiki.ultima8drivecorrector.googlecode.com/git/images/boardoff.png
