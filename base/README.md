@@ -192,9 +192,26 @@ Handbox buttons are encoded within reg 0 as follows:
 
 #### Results
 
-These traces were taken with the v1 design and ALCOR firmware.
+##### Hardware Prototype 
+
+Here are some photos of the drive corrector prototype.
+
+The modified faceplate:
+
+![](https://github.com/garlick/ultima8/blob/master/base/images/faceplate.png)
+
+Faceplate removed, showing transformer mounted next to worm drive, and perfboard attached to back of faceplate:
+
+![](https://github.com/garlick/ultima8/blob/master/base/images/openbase.png)
+
+The other side of the perfboard:
+
+![](https://github.com/garlick/ultima8/blob/master/base/images/boardoff.png)
+
 
 ##### AC Motor Signal
+
+(These traces were taken with the v1 design and ALCOR firmware.)
 
 It's a bit of a stretch to call this an approximation of a sine wave
 with the inductive effects and whatnot, but it seems to get the job
