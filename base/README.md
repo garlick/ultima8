@@ -189,3 +189,25 @@ Handbox buttons are encoded within reg 0 as follows:
 | 0x10 | FOCIN |
 | 0x20 | FOCOUT|
 | 0x40 | LAMP  |
+
+#### Results
+
+These traces were taken with the v1 design and ALCOR firmware.
+
+##### AC Motor Signal
+
+It's a bit of a stretch to call this an approximation of a sine wave
+with the inductive effects and whatnot, but it seems to get the job
+done and it matches the waveform shown in Covington's paper,
+so we declare victory.
+
+![](https://github.com/garlick/ultima8/blob/master/base/images/print_004.png)
+
+##### PIC digital outputs and FET outputs
+
+In the following trace, D,,0,, = SQWAVE, D,,1,, = PHASE2, D,,2,, = PHASE1.
+
+The analog traces are outputs of the IRL 530's before the transformer,
+while driving the motor (referenced to ground).
+
+![](https://github.com/garlick/ultima8/blob/master/base/images/print_002.png)
