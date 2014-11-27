@@ -148,7 +148,7 @@ The handbox jack pinout is ST-4 compatible and thus is suitable for
 autoguiding.  For more on this see this
 [shoestring astronomy forum discussion](http://forum.shoestringastronomy.com/viewtopic.php?f=3&t=288).
 
-== I<sup>2</sup>C Slave Port ==
+#### I<sup>2</sup>C Slave Port
 
 The microprocessor's I<sup>2</sup>C and base power lines are brought out to
 a female Mini-DIN8 jack mounted in the Ultima base.  Although the base can
