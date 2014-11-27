@@ -109,11 +109,12 @@ drives each motor.  The enable input of the H-bridge chip is connected to
 the PIC PWM output, so speed can be adjusted without losing torque by
 altering the duty cycle.  The _A_ inputs are connected to PIC digital outputs.
 
-|| *1A* || *2A* || *3A* || *4A* || *focus* || *declination* ||
-|| 0  || 0  || 0  || 1  || off         || forward ||
-|| 0  || 0  || 1  || 0  || off         || reverse ||
-|| 0  || 1  || 0  || 0  || forward     || off ||
-|| 1  || 0  || 0  || 0  || reverse     || off ||
+| 1A | 2A | 3A | 4A | focus    | declination |
+|----|----|----|----|----------|-------------|
+| 0  | 0  | 0  | 1  | off      | forward     |
+| 0  | 0  | 1  | 0  | off      | reverse     |
+| 0  | 1  | 0  | 0  | forward  | off         |
+| 1  | 0  | 0  | 0  | reverse  | off         |
 
 Braking is achieved by leaving the enable
 line active when setting both motor lines to the same value.
@@ -172,17 +173,19 @@ READ value
 After a READ or a WRITE, subsequent READ ops sample the previously
 addressed _regnum_.  The registers are assigned as follows:
 
-|| *regnum* || *name* || *op* || *description* ||
-|| 0 || buttons || read ||  reads handbox buttons (see below) ||
-|| 0 || ibuttons || write || write virtual handbox buttons (see below) ||
+| regnum | name     | op    | description |
+|--------|----------|-------|-------------|
+| 0      | buttons  | read  | reads handbox buttons (see below) |
+| 0      | ibuttons | write | write virtual handbox buttons (see below) |
 
 Handbox buttons are encoded within reg 0 as follows:
 
-|| *bit* || *name* ||
-|| 0x01 || NORTH ||
-|| 0x02 || SOUTH ||
-|| 0x04 || EAST ||
-|| 0x08 || WEST ||
-|| 0x10 || FOCIN ||
-|| 0x20 || FOCOUT ||
-|| 0x40 || LAMP ||
+| bit  | name  |
+|------|-------|
+| 0x01 | NORTH |
+| 0x02 | SOUTH |
+| 0x04 | EAST  |
+| 0x08 | WEST  |
+| 0x10 | FOCIN |
+| 0x20 | FOCOUT|
+| 0x40 | LAMP  |
