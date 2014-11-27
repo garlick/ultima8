@@ -1,12 +1,10 @@
 CHIP=18F14K22
 CFLAGS=-DMOTOR_HZ=60
 
-all: main.hex hotspot.hex
+all: main.hex
 
 main.hex: main.c freq.h i2c_slave.c
 	picc18 -O$@ --chip=$(CHIP) main.c i2c_slave.c $(CFLAGS)
-hotspot.hex: hotspot.c
-	picc18 -O$@ --chip=$(CHIP) hotspot.c $(CFLAGS)
 
 freq.h: genfreq
 	./genfreq >$@
@@ -20,8 +18,6 @@ clean:
 # -M     erase/program/verify all memory regions
 # -R -T  power and release MCLR after operations
 pgm: main.hex
-	pk2cmd -PPIC$(CHIP) -F$< -M
-hpgm: hotspot.hex
 	pk2cmd -PPIC$(CHIP) -F$< -M
 # verify that pk2cmd sees a programmer
 pk2ver:
