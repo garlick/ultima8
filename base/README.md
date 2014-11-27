@@ -222,7 +222,8 @@ so we declare victory.
 
 ##### PIC digital outputs and FET outputs
 
-In the following trace, D,,0,, = SQWAVE, D,,1,, = PHASE2, D,,2,, = PHASE1.
+In the following trace, D<sub>0</sub> = SQWAVE, D<sub>1</sub> = PHASE2,
+D<sub>2</sub> = PHASE1.
 
 The analog traces are outputs of the IRL 530's before the transformer,
 while driving the motor (referenced to ground).
