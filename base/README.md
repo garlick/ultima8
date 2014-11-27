@@ -29,7 +29,7 @@ other electronics.  The new firmware is programmed in C instead of PIC
 assembly. These enhancements are made possible by updating the Alcor's
 16F84A microprocessor to a modern part.
 
-![](http://wiki.ultima8drivecorrector.googlecode.com/git/images/v2.png)
+![](https://github.com/garlick/ultima8/blob/master/base/schem/v2.png)
 
 #### PIC Microprocessor
 
