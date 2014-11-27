@@ -1,8 +1,4 @@
-#summary Wifi hotspot for Ultima 8 Drive Corrector
-
-_Note: this design is preliminary and has not yet been fully prototyped._
-
-### Introduction
+### WiFi Hotspot for Ultim Drive Corrector
 
 An [ASUS WL-520GU router]
 (http://mightyohm.com/blog/2008/10/building-a-wifi-radio-part-3-hacking-the-asus-wl-520gu/)
@@ -15,7 +11,7 @@ and interfaces for RA/DEC encoders, focuser, and ultima base as depicted
 in the following diagram.
 
 ![Hot spot architecture]
-(http://github.com/garlick/ultima8/blob/master/hotspot/images/hotspotarch.png)
+(https://github.com/garlick/ultima8/tree/master/hotspot/images/hotspotarch.png)
 
 The ASUS router runs a small program that allows the telescope to be
 controlled (push-to) by an iphone or ipad running Sky Safari.
@@ -25,13 +21,13 @@ on port 4030.
 #### Prelim Design
 
 ![Schematic 1]
-(http://github.com/garlick/ultima8/blob/master/hotspot/images/hotspot1.png)
+(https://github.com/garlick/ultima8/tree/master/hotspot/images/hotspot1.png)
 
 ![Schematic 2]
-(http://github.com/garlick/ultima8/blob/master/hotspot/images/hotspot2.png)
+(https://github.com/garlick/ultima8/tree/master/hotspot/images/hotspot2.png)
 
 ![Schematic 3]
-(http://github.com/garlick/ultima8/blob/master/hotspot/images/hotspot3.png)
+(https://github.com/garlick/ultima8/tree/master/hotspot/images/hotspot3.png)
 
 #### Early prototype
 
@@ -50,7 +46,7 @@ to be pressed right up against the enclosure in order to allow enough
 SMA connector to protrude to make good contact with the antenna.
 
 ![Enclosure]
-(http://github.com/garlick/ultima8/blob/master/hotspot/images/hotspotbox.png)
+(https://github.com/garlick/ultima8/tree/master/hotspot/images/hotspotbox.png)
 
 Connectors for 
 * [JMI RA/DEC encoders](http://www.jimsmobile.com/pdf_docs/sgt_documentation.pdf) (RJ-45)
@@ -60,6 +56,6 @@ Connectors for
 are epoxied to the case and wired to a 16 pin wire wrap header.
 
 ![Enclosure 2]
-(http://github.com/garlick/ultima8/blob/master/hotspot/images/hotspotbox2.png)
+(https://github.com/garlick/ultima8/tree/master/hotspot/images/hotspotbox2.png)
 
 The main board is attached to the ABS case lid and wired to the other electronics with two ribbon cables.
