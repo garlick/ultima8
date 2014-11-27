@@ -19,11 +19,11 @@ on port 4030.
 
 #### Prelim Design
 
-![](https://github.com/garlick/ultima8/blob/master/hotspot/images/hotspot1.png)
+![](https://github.com/garlick/ultima8/blob/master/hotspot/schem/hotspot1.png)
 
-![](https://github.com/garlick/ultima8/blob/master/hotspot/images/hotspot2.png)
+![](https://github.com/garlick/ultima8/blob/master/hotspot/schem/hotspot2.png)
 
-![](https://github.com/garlick/ultima8/blob/master/hotspot/images/hotspot3.png)
+![](https://github.com/garlick/ultima8/blob/master/hotspot/schem/hotspot3.png)
 
 #### Early prototype
 
