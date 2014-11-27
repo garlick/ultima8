@@ -1,4 +1,4 @@
-### WiFi Hotspot for Ultim Drive Corrector
+### WiFi Hotspot for Ultima Drive Corrector
 
 An [ASUS WL-520GU router]
 (http://mightyohm.com/blog/2008/10/building-a-wifi-radio-part-3-hacking-the-asus-wl-520gu/)
@@ -28,7 +28,7 @@ on port 4030.
 #### Early prototype
 
 The ASUS board is unboxed and mounted on a
-[sintra foam board]([http://www.solarbotics.com/products/sin3mm/)
+[sintra foam board](http://www.solarbotics.com/products/sin3mm/)
 cut to fit a 7.3in x 5.3in x 3.0in ABS enclosure (Jameco part no. 141859).
 A [PICO-PSU wide range input ATX power supply]
 (http://www.mini-box.com/PicoPSU-120-WI-25-12-25V-DC-DC-ATX-power-supply)
