@@ -19,7 +19,7 @@ The module has two Mini-DIN8 connectors to allow daisy-chaining.
 
 ![](https://github.com/garlick/ultima8/blob/master/auxmod/schem/aux.png)
 
-#### I<sup>2</sup>C Protocol ==
+#### I<sup>2</sup>C Protocol
 
 The I<sup>2</sup>C protocol implemented in firmware is based on two-byte registers.
 To write _value_ into _regnum_, the master performs
@@ -38,4 +38,4 @@ After a READ or a WRITE, subsequent READ ops sample the previously addressed _re
 | 0      | ra-enc      | relative RA encoder position |
 | 1      | dec-enc     | relative DEC encoder position |
 | 2      | focus-enc   | relative Focus encoder position |
-| 3      | focus-motor | motor enable (_lsb_: 0=off, 1=in, 2=out; _msb_: PWM value|
+| 3      | focus-motor | motor enable (lsb: 0=off, 1=in, 2=out; msb: PWM value)|
