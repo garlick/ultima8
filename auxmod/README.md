@@ -17,7 +17,7 @@ Mini-DIN8 I<sup>2</sup>C connector on the base.
 
 The module has two Mini-DIN8 connectors to allow daisy-chaining.
 
-![](http://wiki.ultima8drivecorrector.googlecode.com/git/images/aux.png)
+![](https://github.com/garlick/ultima8/blob/master/auxmod/schem/aux.png)
 
 #### I<sup>2</sup>C Protocol ==
 
